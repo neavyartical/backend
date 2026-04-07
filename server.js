@@ -3,7 +3,6 @@ const fetch = require("node-fetch");
 const cors = require("cors");
 const Stripe = require("stripe");
 
-// OPTIONAL Replicate (safe load)
 let Replicate;
 let replicate;
 
@@ -15,7 +14,7 @@ try {
     });
   }
 } catch (e) {
-  console.log("Replicate not installed yet");
+  console.log("Replicate not installed");
 }
 
 const app = express();
@@ -59,7 +58,7 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-/* IMAGE */
+/* IMAGE (HF) */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -94,12 +93,12 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* VIDEO (SAFE FALLBACK) */
+/* 🎬 REAL VIDEO (WORKING MODEL) */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // If no replicate → fallback
+    // fallback if token not added
     if (!replicate) {
       return res.json({
         video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
@@ -107,27 +106,29 @@ app.post("/video", async (req, res) => {
     }
 
     const output = await replicate.run(
-      "lucataco/animate-diff:latest",
+      "cjwbw/zeroscope-v2-xl",
       {
         input: {
           prompt: prompt,
-          num_frames: 16
+          num_frames: 24,
+          fps: 8
         }
       }
     );
 
-    if (!output || !output[0]) {
+    console.log("VIDEO OUTPUT:", output);
+
+    if (!output) {
       return res.json({
         video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
       });
     }
 
-    res.json({ video: output[0] });
+    res.json({ video: output });
 
   } catch (err) {
     console.error(err);
 
-    // fallback if error
     res.json({
       video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
     });
