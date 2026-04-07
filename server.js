@@ -31,15 +31,24 @@ app.post("/generate", async (req, res) => {
       }
     );
 
+    const contentType = response.headers.get("content-type");
+
+    if (!response.ok || !contentType.includes("image")) {
+      const text = await response.text();
+      console.error("HF ERROR:", text);
+      return res.status(500).send("Image generation failed");
+    }
+
     const buffer = await response.arrayBuffer();
 
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
 
-  } catch {
-    res.status(500).send("Error");
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Server error");
   }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(PORT);
