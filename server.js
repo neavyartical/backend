@@ -1,16 +1,16 @@
-const express = require("express");
-const fetch = require("node-fetch");
-const cors = require("cors");
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors());
+
+const API_KEY = process.env.HF_API_KEY;
 
 app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
+  res.send("Backend is running");
 });
-
-const API_KEY = process.env.API_KEY;
 
 app.post("/generate", async (req, res) => {
   try {
@@ -22,22 +22,25 @@ app.post("/generate", async (req, res) => {
           Authorization: `Bearer ${API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify({
+          inputs: req.body.inputs
+        }),
       }
     );
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(text);
+      return res.status(500).send(text);
+    }
 
     const buffer = await response.arrayBuffer();
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
-  } catch (err) {
-    res.status(500).json({ error: "Error generating image" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Error generating image");
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Server running");
-});
-app.listen(PORT, () => {
-  console.log("Server running on port 3000");
-});
+app.listen(3000, () => console.log("Server running"));
