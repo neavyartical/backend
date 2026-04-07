@@ -17,7 +17,7 @@ app.post("/generate", async (req, res) => {
     const { prompt } = req.body;
 
     const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2",
+      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
       {
         method: "POST",
         headers: {
@@ -33,10 +33,10 @@ app.post("/generate", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
 
-    if (!response.ok || !contentType.includes("image")) {
+    if (!response.ok || !contentType || !contentType.includes("image")) {
       const text = await response.text();
-      console.error("HF ERROR:", text);
-      return res.status(500).send("Image generation failed");
+      console.log("HF ERROR:", text);
+      return res.status(500).send("Failed");
     }
 
     const buffer = await response.arrayBuffer();
@@ -44,9 +44,9 @@ app.post("/generate", async (req, res) => {
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Server error");
+  } catch (e) {
+    console.log("SERVER ERROR:", e);
+    res.status(500).send("Error");
   }
 });
 
