@@ -25,9 +25,10 @@ app.post("/generate", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
 
+    // If NOT image → return real error
     if (!contentType || !contentType.includes("image")) {
-      const errorText = await response.text();
-      return res.status(500).json({ error: errorText });
+      const text = await response.text();
+      return res.status(500).json({ error: text });
     }
 
     const buffer = await response.arrayBuffer();
@@ -38,7 +39,7 @@ app.post("/generate", async (req, res) => {
     });
 
   } catch (error) {
-    res.status(500).json({ error: "Failed to generate image" });
+    res.status(500).json({ error: error.message });
   }
 });
 
