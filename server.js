@@ -1,5 +1,4 @@
 const express = require("express");
-const fetch = require("node-fetch");
 const cors = require("cors");
 
 let Replicate;
@@ -25,42 +24,32 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-/* 🖼 IMAGE (FULLY FIXED) */
+/* 🖼 IMAGE (REPLICATE) */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    if (!process.env.HF_API_KEY) {
-      return res.status(500).send("Missing HF key");
+    if (!replicate) {
+      return res.status(500).send("Replicate not connected");
     }
 
-    const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
+    const output = await replicate.run(
+      "stability-ai/sdxl",
       {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.HF_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          options: {
-            wait_for_model: true
-          }
-        })
+        input: {
+          prompt: prompt
+        }
       }
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      console.log("HF ERROR:", text);
-      return res.status(500).send("HF failed: " + text);
+    console.log("IMAGE:", output);
+
+    if (!output || !output[0]) {
+      return res.status(500).send("Image failed");
     }
 
-    const buffer = await response.arrayBuffer();
-
-    res.setHeader("Content-Type", "image/png");
-    res.send(Buffer.from(buffer));
+    // return image URL
+    res.json({ image: output[0] });
 
   } catch (err) {
     console.error(err);
@@ -68,12 +57,11 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* 🎬 VIDEO (REAL + SAFE) */
+/* 🎬 VIDEO (REPLICATE) */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // fallback if replicate not ready
     if (!replicate) {
       return res.json({
         video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
@@ -91,9 +79,9 @@ app.post("/video", async (req, res) => {
       }
     );
 
-    console.log("VIDEO OUTPUT:", output);
+    console.log("VIDEO:", output);
 
-    if (!output || typeof output !== "string") {
+    if (!output) {
       return res.json({
         video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
       });
