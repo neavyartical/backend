@@ -8,6 +8,10 @@ app.use(express.json());
 
 const HF_API_KEY = process.env.HF_API_KEY;
 
+app.get("/", (req, res) => {
+  res.send("Backend is live");
+});
+
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -22,16 +26,10 @@ app.post("/generate", async (req, res) => {
         },
         body: JSON.stringify({
           inputs: prompt,
-          options: {
-            wait_for_model: true
-          }
+          options: { wait_for_model: true }
         }),
       }
     );
-
-    if (!response.ok) {
-      return res.status(500).send("Error");
-    }
 
     const buffer = await response.arrayBuffer();
 
@@ -43,4 +41,5 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-app.listen(3000);
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("Server running on port " + PORT));
