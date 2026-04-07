@@ -29,11 +29,8 @@ app.post("/generate", async (req, res) => {
       }
     );
 
-    // 🔥 Handle errors properly
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("HF ERROR:", errorText);
-      return res.status(500).send("Error from Hugging Face");
+      return res.status(500).send("Error");
     }
 
     const buffer = await response.arrayBuffer();
@@ -41,10 +38,9 @@ app.post("/generate", async (req, res) => {
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
 
-  } catch (error) {
-    console.error("SERVER ERROR:", error);
-    res.status(500).send("Backend error");
+  } catch {
+    res.status(500).send("Error");
   }
 });
 
-app.listen(3000, () => console.log("Backend running on port 3000"));
+app.listen(3000);
