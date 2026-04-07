@@ -1,47 +1,55 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-const API_KEY = process.env.HF_API_KEY;
+const HF_API_KEY = process.env.HF_API_KEY;
+
+app.get("/", (req, res) => {
+  res.send("Backend is running");
+});
 
 app.post("/generate", async (req, res) => {
   try {
+    const { prompt } = req.body;
+
     const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2",
+      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${HF_API_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          inputs: req.body.prompt
+          inputs: prompt
         })
       }
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      return res.status(400).send(error);
+      const errorText = await response.text();
+      return res.status(500).json({ error: errorText });
     }
 
     const imageBuffer = await response.arrayBuffer();
+    const base64Image = Buffer.from(imageBuffer).toString("base64");
 
-    res.set("Content-Type", "image/png");
-    res.send(Buffer.from(imageBuffer));
+    res.json({
+      image: `data:image/png;base64,${base64Image}`
+    });
+
   } catch (error) {
-    res.status(500).send(error.toString());
+    res.status(500).json({ error: error.message });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
+const PORT = process.env.PORT || 3000;
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Server running...");
+app.listen(PORT, () => {
+  console.log("Server running");
 });
