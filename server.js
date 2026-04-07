@@ -1,17 +1,16 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
-});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3000;
+app.get("/", (req, res) => {
+  res.send("Backend is running 🚀");
+});
 
-// 🔐 PUT YOUR NEW API KEY HERE
-const API_KEY = "hf_YOUR_NEW_KEY";
+const API_KEY = process.env.API_KEY;
 
 app.post("/generate", async (req, res) => {
   try {
@@ -35,6 +34,10 @@ app.post("/generate", async (req, res) => {
   }
 });
 
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running");
+});
 app.listen(PORT, () => {
   console.log("Server running on port 3000");
 });
