@@ -19,18 +19,24 @@ app.post("/generate", async (req, res) => {
           Authorization: `Bearer ${process.env.HF_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          inputs: prompt,
-        }),
+        body: JSON.stringify({ inputs: prompt }),
       }
     );
 
-    const data = await response.arrayBuffer();
-    const base64 = Buffer.from(data).toString("base64");
+    const contentType = response.headers.get("content-type");
+
+    if (!contentType || !contentType.includes("image")) {
+      const errorText = await response.text();
+      return res.status(500).json({ error: errorText });
+    }
+
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
 
     res.json({
       image: `data:image/png;base64,${base64}`,
     });
+
   } catch (error) {
     res.status(500).json({ error: "Failed to generate image" });
   }
