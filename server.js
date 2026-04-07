@@ -1,5 +1,4 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
@@ -15,7 +14,7 @@ app.get("/", (req, res) => {
 app.post("/generate", async (req, res) => {
   try {
     const response = await fetch(
-      "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5",
+      "https://router.huggingface.co/hf-inference/models/runwayml/stable-diffusion-v1-5",
       {
         method: "POST",
         headers: {
@@ -29,19 +28,18 @@ app.post("/generate", async (req, res) => {
     );
 
     if (!response.ok) {
-      const text = await response.text();
-      console.error(text);
-      return res.status(500).send(text);
+      const errorText = await response.text();
+      return res.status(500).send(errorText);
     }
 
     const buffer = await response.arrayBuffer();
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
   } catch (error) {
-    console.error(error);
     res.status(500).send("Error generating image");
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running"));
+
+app.listen(PORT);
