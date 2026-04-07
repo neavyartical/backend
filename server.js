@@ -3,42 +3,41 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-app.use(express.json());
-app.use(cors());
 
-const API_KEY = process.env.HF_API_KEY;
+app.use(cors());
+app.use(express.json());
 
 app.post("/generate", async (req, res) => {
   try {
+    const { prompt } = req.body;
+
     const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/runwayml/stable-diffusion-v1-5",
+      "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: req.body.prompt,
+          inputs: prompt,
         }),
       }
     );
 
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(500).json({ error: text });
-    }
+    const data = await response.arrayBuffer();
+    const base64 = Buffer.from(data).toString("base64");
 
-    const imageBuffer = await response.arrayBuffer();
-
-    res.set("Content-Type", "image/png");
-    res.send(Buffer.from(imageBuffer));
+    res.json({
+      image: `data:image/png;base64,${base64}`,
+    });
   } catch (error) {
     res.status(500).json({ error: "Failed to generate image" });
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
