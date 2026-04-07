@@ -24,40 +24,43 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-/* 🖼 IMAGE (REPLICATE) */
+/* 🖼 IMAGE (REPLICATE ONLY) */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     if (!replicate) {
-      return res.status(500).send("Replicate not connected");
+      return res.json({
+        image: "https://via.placeholder.com/512"
+      });
     }
 
     const output = await replicate.run(
       "stability-ai/sdxl",
       {
-        input: {
-          prompt: prompt
-        }
+        input: { prompt }
       }
     );
 
     console.log("IMAGE:", output);
 
     if (!output || !output[0]) {
-      return res.status(500).send("Image failed");
+      return res.json({
+        image: "https://via.placeholder.com/512"
+      });
     }
 
-    // return image URL
     res.json({ image: output[0] });
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("Image error");
+    res.json({
+      image: "https://via.placeholder.com/512"
+    });
   }
 });
 
-/* 🎬 VIDEO (REPLICATE) */
+/* 🎬 VIDEO */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -72,7 +75,7 @@ app.post("/video", async (req, res) => {
       "cjwbw/zeroscope-v2-xl",
       {
         input: {
-          prompt: prompt,
+          prompt,
           num_frames: 24,
           fps: 8
         }
