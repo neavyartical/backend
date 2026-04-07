@@ -1,7 +1,6 @@
 const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
-const Stripe = require("stripe");
 
 let Replicate;
 let replicate;
@@ -14,57 +13,25 @@ try {
     });
   }
 } catch (e) {
-  console.log("Replicate not installed");
+  console.log("Replicate not ready");
 }
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
-
-/* HEALTH */
+/* TEST */
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-/* PAYMENT */
-app.post("/create-checkout-session", async (req, res) => {
-  try {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.json({ url: "#" });
-    }
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: "ReelMind PRO" },
-          unit_amount: 500
-        },
-        quantity: 1
-      }],
-      success_url: "https://neavyartical.github.io/ReelMind-Ai/?success=true",
-      cancel_url: "https://neavyartical.github.io/ReelMind-Ai/"
-    });
-
-    res.json({ url: session.url });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Stripe error");
-  }
-});
-
-/* IMAGE (HF) */
+/* 🖼 IMAGE FIXED */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     if (!process.env.HF_API_KEY) {
-      return res.status(500).send("No HF API key");
+      return res.status(500).send("Missing HF key");
     }
 
     const response = await fetch(
@@ -76,32 +43,37 @@ app.post("/generate", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          inputs: prompt,
-          options: { wait_for_model: true }
+          inputs: prompt
         })
       }
     );
 
-    const buffer = await response.arrayBuffer();
+    // 🔥 IMPORTANT CHECK
+    if (!response.ok) {
+      const text = await response.text();
+      console.log("HF ERROR:", text);
+      return res.status(500).send("HF failed");
+    }
 
-    res.set("Content-Type", "image/png");
-    res.send(Buffer.from(buffer));
+    const arrayBuffer = await response.arrayBuffer();
+
+    res.setHeader("Content-Type", "image/png");
+    res.send(Buffer.from(arrayBuffer));
 
   } catch (err) {
     console.error(err);
-    res.status(500).send("HF error");
+    res.status(500).send("Image error");
   }
 });
 
-/* 🎬 REAL VIDEO (WORKING MODEL) */
+/* 🎬 VIDEO FIXED */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // fallback if token not added
     if (!replicate) {
       return res.json({
-        video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+        video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
       });
     }
 
@@ -116,11 +88,11 @@ app.post("/video", async (req, res) => {
       }
     );
 
-    console.log("VIDEO OUTPUT:", output);
+    console.log("VIDEO:", output);
 
-    if (!output) {
+    if (!output || typeof output !== "string") {
       return res.json({
-        video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+        video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
       });
     }
 
@@ -128,9 +100,8 @@ app.post("/video", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-
     res.json({
-      video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+      video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
     });
   }
 });
