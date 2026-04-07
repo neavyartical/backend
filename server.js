@@ -8,11 +8,14 @@ app.use(express.json());
 
 const HF_API_KEY = process.env.HF_API_KEY;
 
+/* HEALTH CHECK */
 app.get("/", (req, res) => {
-  res.send("Backend is live");
+  res.send("Backend is live 🚀");
 });
 
-/* IMAGE GENERATION */
+/* =========================
+   IMAGE GENERATION
+========================= */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -37,7 +40,7 @@ app.post("/generate", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
 
-    if (!response.ok || !contentType || !contentType.includes("image")) {
+    if (!response.ok || !contentType?.includes("image")) {
       const text = await response.text();
       console.log("HF IMAGE ERROR:", text);
       return res.status(500).send("Image failed");
@@ -48,13 +51,15 @@ app.post("/generate", async (req, res) => {
     res.set("Content-Type", "image/png");
     res.send(Buffer.from(buffer));
 
-  } catch (e) {
-    console.log("SERVER IMAGE ERROR:", e);
-    res.status(500).send("Error");
+  } catch (err) {
+    console.log("SERVER IMAGE ERROR:", err);
+    res.status(500).send("Server error");
   }
 });
 
-/* VIDEO GENERATION */
+/* =========================
+   VIDEO GENERATION
+========================= */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -76,7 +81,7 @@ app.post("/video", async (req, res) => {
 
     const contentType = response.headers.get("content-type");
 
-    if (!response.ok || !contentType || !contentType.includes("video")) {
+    if (!response.ok || !contentType?.includes("video")) {
       const text = await response.text();
       console.log("HF VIDEO ERROR:", text);
       return res.status(500).send("Video failed");
@@ -87,11 +92,29 @@ app.post("/video", async (req, res) => {
     res.set("Content-Type", "video/mp4");
     res.send(Buffer.from(buffer));
 
-  } catch (e) {
-    console.log("SERVER VIDEO ERROR:", e);
-    res.status(500).send("Error");
+  } catch (err) {
+    console.log("SERVER VIDEO ERROR:", err);
+    res.status(500).send("Server error");
   }
 });
 
+/* =========================
+   BASIC MONETIZATION READY
+========================= */
+
+/* Example: simple usage check endpoint (for future upgrade) */
+app.get("/status", (req, res) => {
+  res.json({
+    message: "API running",
+    plan: "free",
+    limit: "5/day"
+  });
+});
+
+/* ========================= */
+
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running"));
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
