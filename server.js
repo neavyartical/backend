@@ -6,11 +6,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const HF_API_KEY = "PASTE_YOUR_NEW_TOKEN_HERE";
+const HF_API_KEY = process.env.HF_API_KEY;
 
 app.post("/generate", async (req, res) => {
   try {
-    const prompt = req.body.prompt;
+    const { prompt } = req.body;
 
     const response = await fetch(
       "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2",
@@ -24,17 +24,13 @@ app.post("/generate", async (req, res) => {
       }
     );
 
-    if (!response.ok) {
-      const error = await response.text();
-      return res.status(500).send(error);
-    }
+    const buffer = await response.arrayBuffer();
 
-    const image = await response.arrayBuffer();
     res.set("Content-Type", "image/png");
-    res.send(Buffer.from(image));
+    res.send(Buffer.from(buffer));
 
-  } catch (err) {
-    res.status(500).send("Server error");
+  } catch (error) {
+    res.status(500).send("Backend error");
   }
 });
 
