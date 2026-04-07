@@ -23,7 +23,7 @@ app.post("/generate", async (req, res) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: req.body.inputs
+          inputs: req.body.inputs,
         }),
       }
     );
@@ -43,4 +43,5 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Server running"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running"));
