@@ -25,7 +25,7 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-/* 🖼 IMAGE FIXED */
+/* 🖼 IMAGE (FULLY FIXED) */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -43,22 +43,24 @@ app.post("/generate", async (req, res) => {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          inputs: prompt
+          inputs: prompt,
+          options: {
+            wait_for_model: true
+          }
         })
       }
     );
 
-    // 🔥 IMPORTANT CHECK
     if (!response.ok) {
       const text = await response.text();
       console.log("HF ERROR:", text);
-      return res.status(500).send("HF failed");
+      return res.status(500).send("HF failed: " + text);
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const buffer = await response.arrayBuffer();
 
     res.setHeader("Content-Type", "image/png");
-    res.send(Buffer.from(arrayBuffer));
+    res.send(Buffer.from(buffer));
 
   } catch (err) {
     console.error(err);
@@ -66,11 +68,12 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* 🎬 VIDEO FIXED */
+/* 🎬 VIDEO (REAL + SAFE) */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
 
+    // fallback if replicate not ready
     if (!replicate) {
       return res.json({
         video: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"
@@ -88,7 +91,7 @@ app.post("/video", async (req, res) => {
       }
     );
 
-    console.log("VIDEO:", output);
+    console.log("VIDEO OUTPUT:", output);
 
     if (!output || typeof output !== "string") {
       return res.json({
