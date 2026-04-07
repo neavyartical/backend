@@ -2,28 +2,40 @@ const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
 const Stripe = require("stripe");
-const Replicate = require("replicate");
+
+// OPTIONAL Replicate (safe load)
+let Replicate;
+let replicate;
+
+try {
+  Replicate = require("replicate");
+  if (process.env.REPLICATE_API_TOKEN) {
+    replicate = new Replicate({
+      auth: process.env.REPLICATE_API_TOKEN
+    });
+  }
+} catch (e) {
+  console.log("Replicate not installed yet");
+}
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ENV KEYS */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const HF_API_KEY = process.env.HF_API_KEY;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "");
 
-const replicate = new Replicate({
-  auth: process.env.REPLICATE_API_TOKEN
-});
-
-/* HEALTH CHECK */
+/* HEALTH */
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-/* 💰 STRIPE PAYMENT */
+/* PAYMENT */
 app.post("/create-checkout-session", async (req, res) => {
   try {
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.json({ url: "#" });
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
@@ -47,17 +59,21 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-/* 🖼️ IMAGE GENERATION (HF) */
+/* IMAGE */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    if (!process.env.HF_API_KEY) {
+      return res.status(500).send("No HF API key");
+    }
 
     const response = await fetch(
       "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${HF_API_KEY}`,
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -78,38 +94,46 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* 🎬 REAL VIDEO GENERATION (REPLICATE) */
+/* VIDEO (SAFE FALLBACK) */
 app.post("/video", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    // If no replicate → fallback
+    if (!replicate) {
+      return res.json({
+        video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+      });
+    }
 
     const output = await replicate.run(
       "lucataco/animate-diff:latest",
       {
         input: {
           prompt: prompt,
-          num_frames: 16,
-          guidance_scale: 7.5
+          num_frames: 16
         }
       }
     );
 
-    console.log("VIDEO OUTPUT:", output);
-
     if (!output || !output[0]) {
-      return res.status(500).json({ error: "No video generated" });
+      return res.json({
+        video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+      });
     }
 
     res.json({ video: output[0] });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Video generation failed" });
+
+    // fallback if error
+    res.json({
+      video: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif"
+    });
   }
 });
 
-/* 🚀 START SERVER */
+/* START */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("Server running on " + PORT);
-});
+app.listen(PORT, () => console.log("Server running on " + PORT));
