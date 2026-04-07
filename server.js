@@ -26,6 +26,9 @@ app.post("/generate", async (req, res) => {
         },
         body: JSON.stringify({
           inputs: prompt,
+          parameters: {
+            negative_prompt: "blurry, low quality, distorted, bad anatomy"
+          },
           options: { wait_for_model: true }
         }),
       }
