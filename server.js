@@ -1,13 +1,10 @@
 import express from "express";
-import cors from "cors";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
-
-const HF_API_KEY = process.env.HF_API_KEY;
 
 app.get("/", (req, res) => {
   res.send("Backend is running");
@@ -22,12 +19,10 @@ app.post("/generate", async (req, res) => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${HF_API_KEY}`,
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          inputs: prompt
-        })
+        body: JSON.stringify({ inputs: prompt })
       }
     );
 
@@ -36,20 +31,14 @@ app.post("/generate", async (req, res) => {
       return res.status(500).json({ error: errorText });
     }
 
-    const imageBuffer = await response.arrayBuffer();
-    const base64Image = Buffer.from(imageBuffer).toString("base64");
+    const buffer = await response.arrayBuffer();
 
-    res.json({
-      image: `data:image/png;base64,${base64Image}`
-    });
+    res.set("Content-Type", "image/png");
+    res.send(Buffer.from(buffer));
 
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log("Server running");
-});
+app.listen(3000, () => console.log("Server running"));
