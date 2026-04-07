@@ -20,9 +20,21 @@ app.post("/generate", async (req, res) => {
           Authorization: `Bearer ${HF_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ inputs: prompt }),
+        body: JSON.stringify({
+          inputs: prompt,
+          options: {
+            wait_for_model: true
+          }
+        }),
       }
     );
+
+    // 🔥 Handle errors properly
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("HF ERROR:", errorText);
+      return res.status(500).send("Error from Hugging Face");
+    }
 
     const buffer = await response.arrayBuffer();
 
@@ -30,6 +42,7 @@ app.post("/generate", async (req, res) => {
     res.send(Buffer.from(buffer));
 
   } catch (error) {
+    console.error("SERVER ERROR:", error);
     res.status(500).send("Backend error");
   }
 });
