@@ -1,4 +1,5 @@
 import express from "express";
+import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
@@ -6,10 +7,6 @@ app.use(express.json());
 app.use(cors());
 
 const API_KEY = process.env.HF_API_KEY;
-
-app.get("/", (req, res) => {
-  res.send("Backend is running");
-});
 
 app.post("/generate", async (req, res) => {
   try {
@@ -22,24 +19,26 @@ app.post("/generate", async (req, res) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          inputs: req.body.inputs,
+          inputs: req.body.prompt,
         }),
       }
     );
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(500).send(errorText);
+      const text = await response.text();
+      return res.status(500).json({ error: text });
     }
 
-    const buffer = await response.arrayBuffer();
+    const imageBuffer = await response.arrayBuffer();
+
     res.set("Content-Type", "image/png");
-    res.send(Buffer.from(buffer));
+    res.send(Buffer.from(imageBuffer));
   } catch (error) {
-    res.status(500).send("Error generating image");
+    res.status(500).json({ error: "Failed to generate image" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
