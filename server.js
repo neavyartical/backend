@@ -4,7 +4,7 @@ import cors from "cors";
 
 const app = express();
 
-// ✅ CORS FIX
+// ✅ CORS (fix connection issues)
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST"],
@@ -13,7 +13,7 @@ app.use(cors({
 
 app.use(express.json());
 
-// ✅ API KEY FROM RENDER ENV
+// ✅ YOUR API KEY (from Render)
 const API_TOKEN = process.env.REPLICATE_API_TOKEN;
 
 // ✅ TEST ROUTE
@@ -21,11 +21,12 @@ app.get("/", (req, res) => {
   res.send("ReelMind Backend is running 🚀");
 });
 
+// ✅ GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    // 🔥 START GENERATION
+    // 🔥 CREATE PREDICTION (NEW WORKING METHOD)
     const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -33,8 +34,7 @@ app.post("/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        // ✅ WORKING MODEL VERSION (Stable Diffusion)
-        version: "ac732df83cea7fff1b5f8c5e9a1c0b4c0b9c9d1b9c9b9c9b9c9b9c9b9c9b9c9b",
+        model: "stability-ai/sdxl", // ✅ FIXED MODEL
         input: {
           prompt: prompt
         }
@@ -42,11 +42,9 @@ app.post("/generate", async (req, res) => {
     });
 
     let prediction = await start.json();
-
-    // ❗ DEBUG (helps if error happens)
     console.log("START:", prediction);
 
-    // ⏳ WAIT UNTIL FINISHED
+    // ⏳ WAIT UNTIL DONE
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await new Promise(r => setTimeout(r, 2000));
 
@@ -57,12 +55,15 @@ app.post("/generate", async (req, res) => {
       });
 
       prediction = await check.json();
-      console.log("CHECK:", prediction.status);
+      console.log("STATUS:", prediction.status);
     }
 
-    // ❌ IF FAILED
+    // ❌ IF FAILED → SEND ERROR BACK
     if (prediction.status === "failed") {
-      return res.json({ error: "Generation failed", details: prediction });
+      return res.json({
+        error: "Generation failed",
+        details: prediction
+      });
     }
 
     // ✅ SUCCESS
