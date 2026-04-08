@@ -3,92 +3,98 @@ const fetch = require("node-fetch");
 const cors = require("cors");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("ReelMind Backend is running 🚀");
-});
+// 🔥 DEBUG LOG (VERY IMPORTANT)
+console.log("🔥 BACKEND NEW VERSION RUNNING 🔥");
 
-// MAIN GENERATE ROUTE
+// 🔑 GET API KEY FROM RENDER ENV
+const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+
+if (!REPLICATE_API_TOKEN) {
+  console.error("❌ API KEY MISSING!");
+} else {
+  console.log("🔑 ENV KEY LOADED:", REPLICATE_API_TOKEN.substring(0, 10) + "...");
+}
+
+// 🚀 MAIN GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    console.log("📩 Prompt:", prompt);
-    console.log("🔑 ENV KEY:", process.env.REPLICATE_API_TOKEN);
+    console.log("📥 Prompt:", prompt);
 
-    // ❌ STOP if key missing
-    if (!process.env.REPLICATE_API_TOKEN) {
-      return res.status(500).json({
-        error: "API key missing in Render ENV"
-      });
-    }
-
-    // STEP 1: START PREDICTION
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    // 🚀 STEP 1: START GENERATION
+    const startResponse = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
+        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "3f0457b3b3c1d4f8c1cbb9c3a7d8b3b6b3b9b7e9e5f9b7b3c3d9e3b3c3b3b3b3",
+        version: "83b8bce9f5b6c4a6e7cbb0f91b5c1a7109a2c81394b1e1b324f4ba19e6e8d3c5",
         input: {
           prompt: prompt
         }
       })
     });
 
-    const startData = await start.json();
+    const startData = await startResponse.json();
     console.log("🚀 Start response:", startData);
 
-    if (!startData.urls || !startData.urls.get) {
-      return res.status(500).json({
-        error: "Failed to start generation",
-        details: startData
-      });
+    if (!startData.id) {
+      return res.status(500).json({ error: "Failed to start generation", details: startData });
     }
 
-    // STEP 2: POLL RESULT
-    let result;
+    let prediction = startData;
 
-    while (true) {
-      await new Promise(r => setTimeout(r, 2000));
+    // ⏳ STEP 2: POLL UNTIL DONE
+    while (
+      prediction.status !== "succeeded" &&
+      prediction.status !== "failed"
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const poll = await fetch(startData.urls.get, {
-        headers: {
-          "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
+      const pollResponse = await fetch(
+        `https://api.replicate.com/v1/predictions/${prediction.id}`,
+        {
+          headers: {
+            "Authorization": `Token ${REPLICATE_API_TOKEN}`
+          }
         }
-      });
+      );
 
-      result = await poll.json();
-      console.log("⏳ Status:", result.status);
-
-      if (result.status === "succeeded") break;
-
-      if (result.status === "failed") {
-        return res.status(500).json({
-          error: "Generation failed",
-          details: result
-        });
-      }
+      prediction = await pollResponse.json();
+      console.log("⏳ Status:", prediction.status);
     }
 
-    console.log("✅ Output:", result.output);
+    // ✅ SUCCESS
+    if (prediction.status === "succeeded") {
+      console.log("✅ DONE:", prediction.output);
 
-    res.json({
-      video: result.output[0]
-    });
+      return res.json({
+        video: prediction.output
+      });
+    }
 
-  } catch (err) {
-    console.error("🔥 ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+    // ❌ FAILED
+    console.log("❌ FAILED:", prediction);
+    res.status(500).json({ error: "Generation failed", details: prediction });
+
+  } catch (error) {
+    console.error("🔥 ERROR:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// PORT
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running 🚀"));
+// 🧪 TEST ROUTE
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend is running 🚀");
+});
+
+// 🚀 START SERVER
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
