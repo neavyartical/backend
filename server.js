@@ -1,79 +1,42 @@
 import express from "express";
-import fetch from "node-fetch";
 import cors from "cors";
+import Replicate from "replicate";
 
 const app = express();
 
-// ✅ CORS (fix connection issues)
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"]
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// ✅ YOUR API KEY (from Render)
-const API_TOKEN = process.env.REPLICATE_API_TOKEN;
+// ✅ use official replicate client
+const replicate = new Replicate({
+  auth: process.env.REPLICATE_API_TOKEN,
+});
 
-// ✅ TEST ROUTE
+// ✅ test route
 app.get("/", (req, res) => {
   res.send("ReelMind Backend is running 🚀");
 });
 
-// ✅ GENERATE ROUTE
+// ✅ generate route
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    // 🔥 CREATE PREDICTION (NEW WORKING METHOD)
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Token ${API_TOKEN}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "stability-ai/sdxl", // ✅ FIXED MODEL
+    const output = await replicate.run(
+      "stability-ai/sdxl:latest",
+      {
         input: {
           prompt: prompt
         }
-      })
-    });
+      }
+    );
 
-    let prediction = await start.json();
-    console.log("START:", prediction);
+    res.json({ output });
 
-    // ⏳ WAIT UNTIL DONE
-    while (prediction.status !== "succeeded" && prediction.status !== "failed") {
-      await new Promise(r => setTimeout(r, 2000));
-
-      const check = await fetch(prediction.urls.get, {
-        headers: {
-          "Authorization": `Token ${API_TOKEN}`
-        }
-      });
-
-      prediction = await check.json();
-      console.log("STATUS:", prediction.status);
-    }
-
-    // ❌ IF FAILED → SEND ERROR BACK
-    if (prediction.status === "failed") {
-      return res.json({
-        error: "Generation failed",
-        details: prediction
-      });
-    }
-
-    // ✅ SUCCESS
-    res.json(prediction);
-
-  } catch (err) {
-    console.error("ERROR:", err);
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error(error);
+    res.json({ error: "Generation failed", details: error.message });
   }
 });
 
-// 🚀 START SERVER
 app.listen(3000, () => console.log("Server running 🚀"));
