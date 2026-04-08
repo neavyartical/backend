@@ -3,10 +3,22 @@ import fetch from "node-fetch";
 import cors from "cors";
 
 const app = express();
-app.use(cors());
+
+// ✅ FIXED CORS (VERY IMPORTANT)
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
 app.use(express.json());
 
 const API_TOKEN = process.env.REPLICATE_API_TOKEN;
+
+// ✅ TEST ROUTE (so you know server is alive)
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend is running 🚀");
+});
 
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
@@ -26,6 +38,7 @@ app.post("/generate", async (req, res) => {
 
     let prediction = await start.json();
 
+    // ⏳ WAIT UNTIL DONE
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await new Promise(r => setTimeout(r, 2000));
 
@@ -45,4 +58,4 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+app.listen(3000, () => console.log("Server running 🚀"));
