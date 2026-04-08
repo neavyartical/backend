@@ -1,90 +1,80 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>ReelMind AI</title>
-  <style>
-    body {
-      background: #0f172a;
-      color: white;
-      text-align: center;
-      font-family: Arial;
-      padding: 40px;
-    }
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
 
-    input {
-      width: 80%;
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      margin-bottom: 10px;
-    }
+const app = express();
+app.use(express.json());
+app.use(cors());
 
-    button {
-      padding: 12px 20px;
-      border: none;
-      border-radius: 10px;
-      background: limegreen;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-    }
+const PORT = process.env.PORT || 10000;
 
-    video {
-      margin-top: 20px;
-      width: 90%;
-      display: none;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-<body>
+// 🔑 YOUR REPLICATE API KEY FROM RENDER ENV
+const API_KEY = process.env.REPLICATE_API_TOKEN;
 
-  <h1>🎬 ReelMind AI</h1>
+console.log("🔥 BACKEND RUNNING");
+console.log("🔑 KEY:", API_KEY ? "LOADED ✅" : "MISSING ❌");
 
-  <input id="prompt" placeholder="Describe your video..." />
-  <br>
-  <button onclick="generate()">Generate</button>
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend Running 🚀");
+});
 
-  <p id="status"></p>
+app.post("/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body;
 
-  <video id="video" controls></video>
+    console.log("🎯 Prompt:", prompt);
 
-  <script>
-    const BACKEND_URL = "https://backend-ppyz.onrender.com";
+    // STEP 1: Start prediction
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        version: "db21e45c2c7d43c6d5f3f5bde9d1e3c3b6e6b77c5e6c9fcbf3b0d7c5c6a3b7f5", // video model
+        input: {
+          prompt: prompt,
+        },
+      }),
+    });
 
-    async function generate() {
-      const prompt = document.getElementById("prompt").value;
+    const startData = await start.json();
+    console.log("🚀 Start:", startData);
 
-      document.getElementById("status").innerText = "Generating...";
+    let status = startData.status;
+    let id = startData.id;
 
-      try {
-        const res = await fetch(`${BACKEND_URL}/generate`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ prompt }),
-        });
+    // STEP 2: Poll result
+    while (status !== "succeeded" && status !== "failed") {
+      await new Promise(r => setTimeout(r, 3000));
 
-        const data = await res.json();
+      const check = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+        headers: {
+          "Authorization": `Token ${API_KEY}`,
+        },
+      });
 
-        if (data.video) {
-          document.getElementById("status").innerText = "Done ✅";
+      const checkData = await check.json();
+      status = checkData.status;
 
-          const video = document.getElementById("video");
-          video.src = data.video;
-          video.style.display = "block";
-        } else {
-          document.getElementById("status").innerText = "Failed ❌";
-          console.log(data);
-        }
-      } catch (err) {
-        document.getElementById("status").innerText = "Error ❌";
-        console.error(err);
+      console.log("⏳ Status:", status);
+
+      if (status === "succeeded") {
+        return res.json({ video: checkData.output[0] });
+      }
+
+      if (status === "failed") {
+        return res.json({ error: "Generation failed" });
       }
     }
-  </script>
 
-</body>
-</html>
+  } catch (err) {
+    console.error(err);
+    res.json({ error: "Server error" });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
