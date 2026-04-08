@@ -1,23 +1,33 @@
-const BACKEND_URL = "https://backend-ppyz.onrender.com";
+import express from "express";
+import cors from "cors";
 
-async function generate() {
-  console.log("🔥 Button clicked");
+const app = express();
+const PORT = process.env.PORT || 10000;
 
-  document.getElementById("status").innerText = "Testing connection...";
+// MIDDLEWARE
+app.use(cors());
+app.use(express.json());
 
-  try {
-    const res = await fetch(`${BACKEND_URL}/test`);
+// TEST ROUTE
+app.get("/test", (req, res) => {
+  console.log("✅ TEST HIT");
+  res.json({ message: "Backend working ✅" });
+});
 
-    console.log("📡 Request sent");
+// GENERATE ROUTE (TEMP SIMPLE)
+app.post("/generate", (req, res) => {
+  const { prompt } = req.body;
 
-    const data = await res.json();
+  console.log("📩 Prompt received:", prompt);
 
-    console.log("✅ Response:", data);
+  // TEMP FAKE RESPONSE (to confirm working)
+  res.json({
+    video: "https://www.w3schools.com/html/mov_bbb.mp4"
+  });
+});
 
-    document.getElementById("status").innerText = data.message;
-
-  } catch (err) {
-    console.error("❌ ERROR:", err);
-    document.getElementById("status").innerText = "Connection failed ❌";
-  }
-}
+// START SERVER
+app.listen(PORT, () => {
+  console.log("🔥 BACKEND RUNNING");
+  console.log("🚀 Server on port", PORT);
+});
