@@ -1,72 +1,55 @@
-import express from "express";
-import cors from "cors";
-import fetch from "node-fetch";
+const express = require("express");
+const fetch = require("node-fetch");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("ReelMind Backend is running 🚀");
-});
-
 app.post("/generate", async (req, res) => {
-  const { prompt } = req.body;
-
   try {
-    console.log("Prompt:", prompt);
+    const { prompt } = req.body;
 
-    // STEP 1: Start prediction
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": "Token YOUR_REPLICATE_API_KEY",
+        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "a9758cbf...REPLACE_THIS...", // ⚠️ will fix below
+        version: "3f0457b3b3c1d4f8c1cbb9c3a7d8b3b6b3b9b7e9e5f9b7b3c3d9e3b3c3b3b3b3",
         input: {
           prompt: prompt
         }
       })
     });
 
-    const startData = await start.json();
+    const data = await response.json();
 
-    if (startData.error) {
-      console.log(startData);
-      return res.status(500).json({ error: "Start failed" });
+    if (!data.urls || !data.urls.get) {
+      return res.status(500).json({ error: "Failed to start generation" });
     }
 
-    let result = startData;
+    let result;
 
-    // STEP 2: Wait until finished
-    while (result.status !== "succeeded" && result.status !== "failed") {
-      await new Promise(r => setTimeout(r, 2000));
-
-      const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${result.id}`,
-        {
-          headers: {
-            "Authorization": "Token YOUR_REPLICATE_API_KEY"
-          }
+    while (true) {
+      const poll = await fetch(data.urls.get, {
+        headers: {
+          "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
         }
-      );
-
-      result = await check.json();
-      console.log("Status:", result.status);
-    }
-
-    if (result.status === "succeeded") {
-      console.log(result.output);
-
-      res.json({
-        video: result.output[0] // 👈 important
       });
 
-    } else {
-      res.status(500).json({ error: "Generation failed" });
+      result = await poll.json();
+
+      if (result.status === "succeeded") break;
+      if (result.status === "failed") {
+        return res.status(500).json({ error: "Generation failed" });
+      }
+
+      await new Promise(r => setTimeout(r, 2000));
     }
+
+    res.json({ video: result.output[0] });
 
   } catch (err) {
     console.error(err);
@@ -74,5 +57,4 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running 🚀"));
+app.listen(3000, () => console.log("Server running"));
