@@ -6,7 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const REPLICATE_API_TOKEN = "YOUR_REPLICATE_API_KEY"; // 🔑 PUT YOUR KEY HERE
+const API_KEY = "YOUR_REPLICATE_API_KEY"; // 🔑 PUT YOUR KEY
 
 app.get("/", (req, res) => {
   res.send("ReelMind Backend is running 🚀");
@@ -16,33 +16,37 @@ app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // STEP 1: Start prediction
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    // Create prediction
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
+        "Authorization": `Token ${API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "db21e45c3b0f5b5f2d7d2a0f5f4d1c5d", // stable video/image model
+        version: "stability-ai/stable-diffusion", // ✅ reliable model
         input: { prompt }
       })
     });
 
-    let prediction = await response.json();
+    let prediction = await start.json();
 
-    // STEP 2: Poll until done
+    let tries = 0;
+    const maxTries = 20; // ⏳ ~1 minute max
+
     while (
       prediction.status !== "succeeded" &&
-      prediction.status !== "failed"
+      prediction.status !== "failed" &&
+      tries < maxTries
     ) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(r => setTimeout(r, 3000));
+      tries++;
 
       const poll = await fetch(
         `https://api.replicate.com/v1/predictions/${prediction.id}`,
         {
           headers: {
-            "Authorization": `Token ${REPLICATE_API_TOKEN}`
+            "Authorization": `Token ${API_KEY}`
           }
         }
       );
@@ -50,20 +54,22 @@ app.post("/generate", async (req, res) => {
       prediction = await poll.json();
     }
 
-    // STEP 3: Return result
     if (prediction.status === "succeeded") {
       res.json({
         success: true,
-        video: prediction.output
+        output: prediction.output
       });
     } else {
-      res.json({ success: false });
+      res.json({
+        success: false,
+        message: "Took too long or failed"
+      });
     }
 
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err);
     res.json({ success: false });
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+app.listen(3000, () => console.log("Server running"));
