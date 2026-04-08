@@ -1,32 +1,23 @@
 import express from "express";
-import cors from "cors";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("ReelMind Backend is running 🚀");
-});
-
-// GENERATE VIDEO ROUTE
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    // ⚠️ Replace with your Replicate API Key
-    const REPLICATE_API = "YOUR_API_KEY_HERE";
-
     const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Token ${REPLICATE_API}`,
+        "Authorization": "Token YOUR_REPLICATE_API_KEY",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "783f2c7c4f9c7c9f3c4d4d1e6c1c6d0e", 
+        version: "db21e45f3f0a2a6d9c7e6a8d1f4d74d1c7c0b2fdf8a2e9d3b1b3e4e2c6d1a1f", // video model
         input: {
           prompt: prompt
         }
@@ -35,15 +26,20 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
 
+    // 🔥 SEND BACK RESULT
     res.json({
-      status: "processing",
-      data: data
+      status: "success",
+      output: data
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed" });
+    res.status(500).json({ error: "failed" });
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend is running 🚀");
+});
+
+app.listen(3000, () => console.log("Server running"));
