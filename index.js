@@ -1,78 +1,23 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+const BACKEND_URL = "https://backend-ppyz.onrender.com";
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+async function generate() {
+  console.log("🔥 Button clicked");
 
-console.log("🔥 BACKEND RUNNING");
+  document.getElementById("status").innerText = "Testing connection...";
 
-const API_KEY = process.env.REPLICATE_API_TOKEN;
-
-if (!API_KEY) {
-  console.log("❌ API KEY MISSING");
-} else {
-  console.log("🔑 KEY LOADED ✅");
-}
-
-app.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const res = await fetch(`${BACKEND_URL}/test`);
 
-    console.log("📩 Prompt:", prompt);
+    console.log("📡 Request sent");
 
-    // STEP 1: Start prediction
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Token ${API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        version: "db21e45e8f922c3f6c7c5e6cdeaa9f6c1c7e8d2a0c0a6f7b6d3e2b1c0a9f8e7d",
-        input: { prompt: prompt }
-      }),
-    });
+    const data = await res.json();
 
-    const prediction = await start.json();
+    console.log("✅ Response:", data);
 
-    console.log("🚀 Started:", prediction.id);
-
-    let result;
-
-    // STEP 2: Poll result
-    while (true) {
-      await new Promise(r => setTimeout(r, 2000));
-
-      const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${prediction.id}`,
-        {
-          headers: {
-            "Authorization": `Token ${API_KEY}`,
-          },
-        }
-      );
-
-      result = await check.json();
-
-      console.log("⏳ Status:", result.status);
-
-      if (result.status === "succeeded") break;
-      if (result.status === "failed") {
-        return res.json({ error: "Generation failed" });
-      }
-    }
-
-    console.log("✅ DONE");
-
-    res.json({ video: result.output });
+    document.getElementById("status").innerText = data.message;
 
   } catch (err) {
-    console.log("❌ ERROR:", err);
-    res.json({ error: err.message });
+    console.error("❌ ERROR:", err);
+    document.getElementById("status").innerText = "Connection failed ❌";
   }
-});
-
-app.listen(10000, () => {
-  console.log("🚀 Server running on port 10000");
+}
