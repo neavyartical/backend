@@ -1,89 +1,69 @@
+import express from "express";
+import fetch from "node-fetch";
+import cors from "cors";
 
-<!DOCTYPE html>
-<html>
-<head>
-  <title>ReelMind AI</title>
-  <style>
-    body {
-      background: #0b1a2a;
-      color: white;
-      text-align: center;
-      font-family: Arial;
-      padding: 50px;
-    }
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-    input {
-      width: 80%;
-      padding: 15px;
-      border-radius: 10px;
-      border: none;
-      font-size: 16px;
-    }
+const REPLICATE_API_TOKEN = "YOUR_REPLICATE_API_KEY"; // 🔑 PUT YOUR KEY HERE
 
-    button {
-      margin-top: 20px;
-      padding: 15px 30px;
-      border: none;
-      border-radius: 10px;
-      background: green;
-      color: white;
-      font-size: 18px;
-    }
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend is running 🚀");
+});
 
-    video {
-      margin-top: 20px;
-      width: 90%;
-      border-radius: 10px;
-    }
-  </style>
-</head>
-
-<body>
-
-<h1>🎬 ReelMind AI</h1>
-
-<input id="prompt" placeholder="Describe your video..."/>
-<br>
-
-<button onclick="generate()">Generate</button>
-
-<p id="status"></p>
-
-<video id="video" controls></video>
-
-<script>
-async function generate() {
-  const prompt = document.getElementById("prompt").value;
-  const status = document.getElementById("status");
-  const video = document.getElementById("video");
-
-  status.innerText = "Generating video... ⏳";
-
+app.post("/generate", async (req, res) => {
   try {
-    const res = await fetch("https://backend-ppyz.onrender.com/generate", {
+    const { prompt } = req.body;
+
+    // STEP 1: Start prediction
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
+        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({
+        version: "db21e45c3b0f5b5f2d7d2a0f5f4d1c5d", // stable video/image model
+        input: { prompt }
+      })
     });
 
-    const data = await res.json();
-    console.log(data);
+    let prediction = await response.json();
 
-    if (data.video) {
-      video.src = data.video;
-      status.innerText = "Done ✅";
-    } else {
-      status.innerText = "Failed ❌";
+    // STEP 2: Poll until done
+    while (
+      prediction.status !== "succeeded" &&
+      prediction.status !== "failed"
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const poll = await fetch(
+        `https://api.replicate.com/v1/predictions/${prediction.id}`,
+        {
+          headers: {
+            "Authorization": `Token ${REPLICATE_API_TOKEN}`
+          }
+        }
+      );
+
+      prediction = await poll.json();
     }
 
-  } catch (err) {
-    console.error(err);
-    status.innerText = "Error ❌";
-  }
-}
-</script>
+    // STEP 3: Return result
+    if (prediction.status === "succeeded") {
+      res.json({
+        success: true,
+        video: prediction.output
+      });
+    } else {
+      res.json({ success: false });
+    }
 
-</body>
-</html>
+  } catch (error) {
+    console.error(error);
+    res.json({ success: false });
+  }
+});
+
+app.listen(3000, () => console.log("Server running on port 3000"));
