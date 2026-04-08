@@ -8,19 +8,17 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// TEST ROUTE
-app.get("/test", (req, res) => {
-  res.json({ message: "Backend working ✅" });
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend is running 🚀");
 });
 
-// GENERATE (REAL AI IMAGE)
+// GENERATE IMAGE
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   console.log("📩 Prompt:", prompt);
 
   try {
-    // START GENERATION
     const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -29,9 +27,7 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         version: "a9758cbf8b2d6d8e0c2c9e5cde5a4c8e3b0c44298fc1c149afbf4c8996fb9241",
-        input: {
-          prompt: prompt
-        }
+        input: { prompt }
       })
     });
 
@@ -40,7 +36,6 @@ app.post("/generate", async (req, res) => {
 
     let result;
 
-    // WAIT LOOP
     while (true) {
       await new Promise(r => setTimeout(r, 2000));
 
@@ -54,14 +49,18 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
-      if (result.status === "failed") throw new Error("Failed");
+      if (result.status === "failed") throw new Error("AI failed");
     }
 
-    console.log("✅ Output:", result.output);
+    if (result.output && result.output.length > 0) {
+      console.log("✅ Output:", result.output[0]);
 
-    res.json({
-      video: result.output[0] // image URL
-    });
+      res.json({
+        video: result.output[0] // image URL
+      });
+    } else {
+      res.status(500).json({ error: "No output from AI" });
+    }
 
   } catch (err) {
     console.error("❌ ERROR:", err);
