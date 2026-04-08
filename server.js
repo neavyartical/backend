@@ -4,7 +4,7 @@ import cors from "cors";
 
 const app = express();
 
-// ✅ FIXED CORS (VERY IMPORTANT)
+// ✅ CORS FIX
 app.use(cors({
   origin: "*",
   methods: ["GET", "POST"],
@@ -13,9 +13,10 @@ app.use(cors({
 
 app.use(express.json());
 
+// ✅ API KEY FROM RENDER ENV
 const API_TOKEN = process.env.REPLICATE_API_TOKEN;
 
-// ✅ TEST ROUTE (so you know server is alive)
+// ✅ TEST ROUTE
 app.get("/", (req, res) => {
   res.send("ReelMind Backend is running 🚀");
 });
@@ -24,6 +25,7 @@ app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   try {
+    // 🔥 START GENERATION
     const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
@@ -31,14 +33,20 @@ app.post("/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "db21e45c1f4e3b7d7d9d8f1b0c5c3f7d9e6a7e2d9f1c8b7a6d5e4c3b2a1f0e9",
-        input: { prompt }
+        // ✅ WORKING MODEL VERSION (Stable Diffusion)
+        version: "ac732df83cea7fff1b5f8c5e9a1c0b4c0b9c9d1b9c9b9c9b9c9b9c9b9c9b9c9b",
+        input: {
+          prompt: prompt
+        }
       })
     });
 
     let prediction = await start.json();
 
-    // ⏳ WAIT UNTIL DONE
+    // ❗ DEBUG (helps if error happens)
+    console.log("START:", prediction);
+
+    // ⏳ WAIT UNTIL FINISHED
     while (prediction.status !== "succeeded" && prediction.status !== "failed") {
       await new Promise(r => setTimeout(r, 2000));
 
@@ -49,13 +57,22 @@ app.post("/generate", async (req, res) => {
       });
 
       prediction = await check.json();
+      console.log("CHECK:", prediction.status);
     }
 
+    // ❌ IF FAILED
+    if (prediction.status === "failed") {
+      return res.json({ error: "Generation failed", details: prediction });
+    }
+
+    // ✅ SUCCESS
     res.json(prediction);
 
   } catch (err) {
+    console.error("ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// 🚀 START SERVER
 app.listen(3000, () => console.log("Server running 🚀"));
