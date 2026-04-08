@@ -1,100 +1,91 @@
-const express = require("express");
-const fetch = require("node-fetch");
-const cors = require("cors");
+import express from "express";
+import fetch from "node-fetch";
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-// 🔥 DEBUG LOG (VERY IMPORTANT)
-console.log("🔥 BACKEND NEW VERSION RUNNING 🔥");
+const PORT = process.env.PORT || 10000;
 
-// 🔑 GET API KEY FROM RENDER ENV
-const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
+// 🔑 YOUR REPLICATE API KEY
+const API_KEY = process.env.REPLICATE_API_KEY;
 
-if (!REPLICATE_API_TOKEN) {
-  console.error("❌ API KEY MISSING!");
+if (!API_KEY) {
+  console.log("❌ API KEY MISSING!");
 } else {
-  console.log("🔑 ENV KEY LOADED:", REPLICATE_API_TOKEN.substring(0, 10) + "...");
+  console.log("🔑 ENV KEY LOADED:", API_KEY.slice(0, 8) + "...");
 }
 
-// 🚀 MAIN GENERATE ROUTE
+// 🚀 GENERATE VIDEO
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const prompt = req.body.prompt;
 
-    console.log("📥 Prompt:", prompt);
+    console.log("🚀 Prompt:", prompt);
 
-    // 🚀 STEP 1: START GENERATION
-    const startResponse = await fetch("https://api.replicate.com/v1/predictions", {
+    // STEP 1: CREATE PREDICTION
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
-        "Authorization": `Token ${REPLICATE_API_TOKEN}`,
-        "Content-Type": "application/json"
+        Authorization: `Token ${API_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        version: "83b8bce9f5b6c4a6e7cbb0f91b5c1a7109a2c81394b1e1b324f4ba19e6e8d3c5",
+        version: "db21e45d3f3aebfdbe0e6e8f4a4cbb6a9d9b8e3d3e4f9e1a7d4b2f8c9c1a0abc", // video model
         input: {
-          prompt: prompt
-        }
-      })
+          prompt: prompt,
+          fps: 24
+        },
+      }),
     });
 
-    const startData = await startResponse.json();
-    console.log("🚀 Start response:", startData);
+    const data = await response.json();
+    console.log("📦 Start response:", data);
 
-    if (!startData.id) {
-      return res.status(500).json({ error: "Failed to start generation", details: startData });
+    if (!data.id) {
+      return res.status(500).json({ error: data });
     }
 
-    let prediction = startData;
+    let status = data.status;
+    let output = null;
 
-    // ⏳ STEP 2: POLL UNTIL DONE
-    while (
-      prediction.status !== "succeeded" &&
-      prediction.status !== "failed"
-    ) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    // STEP 2: WAIT FOR RESULT
+    while (status !== "succeeded" && status !== "failed") {
+      await new Promise((r) => setTimeout(r, 3000));
 
-      const pollResponse = await fetch(
-        `https://api.replicate.com/v1/predictions/${prediction.id}`,
+      const poll = await fetch(
+        `https://api.replicate.com/v1/predictions/${data.id}`,
         {
           headers: {
-            "Authorization": `Token ${REPLICATE_API_TOKEN}`
-          }
+            Authorization: `Token ${API_KEY}`,
+          },
         }
       );
 
-      prediction = await pollResponse.json();
-      console.log("⏳ Status:", prediction.status);
+      const pollData = await poll.json();
+
+      console.log("⏳ Status:", pollData.status);
+
+      status = pollData.status;
+      output = pollData.output;
     }
 
-    // ✅ SUCCESS
-    if (prediction.status === "succeeded") {
-      console.log("✅ DONE:", prediction.output);
-
-      return res.json({
-        video: prediction.output
-      });
+    if (status === "succeeded") {
+      console.log("✅ DONE:", output);
+      res.json({ video: output[0] });
+    } else {
+      res.status(500).json({ error: "Generation failed" });
     }
-
-    // ❌ FAILED
-    console.log("❌ FAILED:", prediction);
-    res.status(500).json({ error: "Generation failed", details: prediction });
-
-  } catch (error) {
-    console.error("🔥 ERROR:", error);
-    res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.log("❌ ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// 🧪 TEST ROUTE
+// ROOT TEST
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend is running 🚀");
+  res.send("ReelMind Backend Running 🚀");
 });
 
-// 🚀 START SERVER
-const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
