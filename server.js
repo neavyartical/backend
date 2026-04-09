@@ -5,28 +5,42 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Test route
-app.get("/", (req, res) => {
-  res.send("Backend running 🚀");
-});
-
-// Main API
-app.post("/generate", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    console.log("Prompt:", prompt);
-
-    // TEMP RESPONSE (no API needed)
-    res.json({
-      result: "🔥 AI Response: " + prompt
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error" });
+// FREE TEXT GENERATOR (FAKE AI BUT SMART)
+function generateText(prompt, type){
+  if(type === "story"){
+    return "📖 Story: " + prompt + "...\nA powerful story unfolds with emotions and creativity.";
   }
+
+  if(type === "funny"){
+    return "😂 Funny: " + prompt + " turned into something hilarious!";
+  }
+
+  if(type === "money"){
+    return "💰 Idea: " + prompt + " can be monetized using social media + AI tools.";
+  }
+
+  return "🤖 AI Response: " + prompt;
+}
+
+// ROUTE
+app.post("/generate", (req,res)=>{
+  const {prompt, type} = req.body;
+
+  if(type === "image"){
+    return res.json({
+      result: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+    });
+  }
+
+  if(type === "video"){
+    return res.json({
+      result: "🎬 Free video preview mode. Upgrade for real AI video."
+    });
+  }
+
+  res.json({
+    result: generateText(prompt, type)
+  });
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(3000, ()=> console.log("Server running"));
