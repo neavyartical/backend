@@ -18,7 +18,7 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
@@ -26,17 +26,15 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
-        input: {
-          prompt: prompt
-        }
+        input: { prompt }
       })
     });
 
-    const startData = await response.json();
-    console.log("🚀 Start:", startData);
+    const startData = await start.json();
+    console.log("🚀 START DATA:", startData);
 
     if (!startData.id) {
-      return res.status(500).json({ error: startData });
+      return res.json({ error: startData });
     }
 
     let result;
@@ -54,27 +52,25 @@ app.post("/generate", async (req, res) => {
       );
 
       result = await check.json();
-      console.log("⏳ Status:", result.status);
+      console.log("⏳ STATUS:", result.status);
 
       if (result.status === "succeeded") break;
     }
 
-    console.log("🎯 RESULT:", result);
+    console.log("🎯 FULL RESULT:", result);
 
-    if (result.output) {
-      res.json({
-        video: result.output[0] // still works with your frontend
-      });
-    } else {
-      res.status(500).json({ error: "No output", result });
-    }
+    // 🔥 RETURN RAW OUTPUT
+    res.json({
+      video: result.output || null,
+      raw: result
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed" });
+    console.error("❌ ERROR:", err);
+    res.json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 IMAGE AI BACKEND RUNNING");
+  console.log("🔥 DEBUG BACKEND RUNNING");
 });
