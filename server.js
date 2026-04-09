@@ -1,65 +1,45 @@
 import express from "express";
 import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// USERS (simple memory for now)
-let users = {};
+// 🔑 PUT YOUR OPENAI KEY HERE
+const OPENAI_KEY = "YOUR_OPENAI_API_KEY";
 
-// LOGIN
-app.post("/login", (req,res)=>{
-  const {username,password} = req.body;
+// AI ROUTE
+app.post("/generate", async (req,res)=>{
+  const {prompt} = req.body;
 
-  if(!users[username]){
-    users[username] = { password, premium:false };
-  }
+  try{
+    // REAL AI CALL
+    const response = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer " + OPENAI_KEY
+      },
+      body:JSON.stringify({
+        model:"gpt-4o-mini",
+        messages:[{role:"user",content:prompt}],
+        max_tokens:100
+      })
+    });
 
-  if(users[username].password === password){
-    res.json({ success:true, premium:users[username].premium });
-  } else {
-    res.json({ success:false });
+    const data = await response.json();
+
+    res.json({
+      result: data.choices?.[0]?.message?.content || "No response"
+    });
+
+  }catch(e){
+    // FALLBACK (FREE)
+    res.json({
+      result:"🤖 (offline AI): " + prompt + " is a powerful idea!"
+    });
   }
 });
 
-// VERIFY PAYMENT (SIMULATED)
-app.post("/verify", (req,res)=>{
-  const {username} = req.body;
-
-  if(users[username]){
-    users[username].premium = true;
-    return res.json({ success:true });
-  }
-
-  res.json({ success:false });
-});
-
-// GENERATE
-app.post("/generate",(req,res)=>{
-  const {prompt,type} = req.body;
-
-  if(type==="image"){
-    return res.json({
-      result:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
-    });
-  }
-
-  if(type==="story"){
-    return res.json({
-      result:`📖 Story:\n${prompt}...\nAn amazing story unfolds.`
-    });
-  }
-
-  if(type==="music"){
-    return res.json({
-      result:"🎵 Music system coming soon (premium feature)"
-    });
-  }
-
-  res.json({
-    result:"🤖 AI: " + prompt
-  });
-});
-
-app.listen(3000, ()=>console.log("Server running"));
+app.listen(3000, ()=>console.log("AI server running"));
