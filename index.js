@@ -12,7 +12,7 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// ✅ SINGLE CLEAN ROUTE
+// ✅ CLEAN GENERATE ROUTE
 app.post("/generate", (req, res) => {
   const { prompt } = req.body;
 
