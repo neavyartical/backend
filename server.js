@@ -5,17 +5,28 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/", (req,res)=>{
+// Test route
+app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-app.post("/generate", (req, res) => {
-  console.log("REQUEST RECEIVED"); // 🔥 DEBUG
+// Main API
+app.post("/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body;
 
-  res.json({
-    result: "🔥 WORKING BACKEND"
-  });
+    console.log("Prompt:", prompt);
+
+    // TEMP RESPONSE (no API needed)
+    res.json({
+      result: "🔥 AI Response: " + prompt
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, ()=> console.log("Server running"));
+app.listen(PORT, () => console.log("Server running on port " + PORT));
