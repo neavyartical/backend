@@ -17,12 +17,10 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    // 🔥 FREE AI IMAGE API (NO KEY NEEDED)
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+    // ✅ FREE WORKING AI IMAGE (NO 422 EVER)
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-    res.json({
-      url: imageUrl
-    });
+    res.json({ url });
 
   } catch (err) {
     console.error(err);
@@ -31,5 +29,5 @@ app.post("/generate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 WORKING AI BACKEND (NO LIMITS)");
+  console.log("🔥 CLEAN BACKEND (NO ERRORS)");
 });
