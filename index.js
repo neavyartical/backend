@@ -18,29 +18,38 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    // START GENERATION
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
-        input: { prompt }
+        version: "a9758cbf9a7c7d6d0db1b5aefb6dc9c6c0e6d9c5d7f8b8e7c9d8f6b7a5e4c3d2",
+        input: {
+          prompt: prompt
+        }
       })
     });
 
-    const startData = await start.json();
-    console.log("🚀 Started:", startData.id);
+    const data = await response.json();
+    console.log("FULL RESPONSE:", data);
 
-    // ⏱️ WAIT LOOP (WITH LIMIT — IMPORTANT)
+    // 🚨 IMPORTANT CHECK
+    if (!data.id) {
+      return res.status(500).json({
+        error: "Replicate failed",
+        details: data
+      });
+    }
+
     let result;
-    for (let i = 0; i < 20; i++) {
+
+    for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 2000));
 
       const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${startData.id}`,
+        `https://api.replicate.com/v1/predictions/${data.id}`,
         {
           headers: {
             "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
@@ -55,13 +64,14 @@ app.post("/generate", async (req, res) => {
       if (result.status === "failed") throw new Error("AI failed");
     }
 
-    // ✅ RETURN RESULT
-    if (result.output && result.output.length > 0) {
+    if (result.output) {
       res.json({
-        video: result.output[0]
+        video: Array.isArray(result.output)
+          ? result.output[0]
+          : result.output
       });
     } else {
-      res.status(500).json({ error: "No output" });
+      res.status(500).json({ error: "No output generated" });
     }
 
   } catch (err) {
@@ -71,5 +81,5 @@ app.post("/generate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 REPLICATE BACKEND RUNNING");
+  console.log("🔥 BACKEND RUNNING");
 });
