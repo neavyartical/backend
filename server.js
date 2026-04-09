@@ -1,59 +1,103 @@
 import express from "express";
 import cors from "cors";
-import bodyParser from "body-parser";
+import mongoose from "mongoose";
+import bcrypt from "bcrypt";
+import Stripe from "stripe";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// 🔐 USERS (simple memory for now)
-let users = {};
+// 🔗 CONNECT DB
+mongoose.connect(process.env.MONGO_URL)
+.then(()=>console.log("MongoDB connected"))
+.catch(err=>console.log(err));
 
-// 💡 DAILY LIMIT (protect cost)
-const FREE_LIMIT = 3;
+// 👤 USER MODEL
+const UserSchema = new mongoose.Schema({
+  username:String,
+  password:String,
+  premium:{type:Boolean, default:false},
+  usage:{type:Number, default:0},
+  lastReset:{type:Number, default:Date.now}
+});
+
+const User = mongoose.model("User",UserSchema);
+
+// 🔄 DAILY RESET FUNCTION
+function resetUsage(user){
+  let now = Date.now();
+  if(now - user.lastReset > 86400000){
+    user.usage = 0;
+    user.lastReset = now;
+  }
+}
 
 // 🟢 REGISTER
-app.post("/register", (req,res)=>{
+app.post("/register", async (req,res)=>{
   const {username,password} = req.body;
 
-  if(!username || !password){
-    return res.json({success:false});
+  let existing = await User.findOne({username});
+  if(existing){
+    return res.json({success:false,message:"User exists"});
   }
 
-  if(!users[username]){
-    users[username] = {
-      password,
-      premium:false,
-      usage:0
-    };
-  }
+  const hashed = await bcrypt.hash(password,10);
+
+  await User.create({
+    username,
+    password:hashed
+  });
 
   res.json({success:true});
 });
 
 // 🔵 LOGIN
-app.post("/login",(req,res)=>{
+app.post("/login", async (req,res)=>{
   const {username,password} = req.body;
 
-  if(users[username] && users[username].password === password){
+  let user = await User.findOne({username});
+
+  if(user && await bcrypt.compare(password,user.password)){
     return res.json({
       success:true,
-      premium:users[username].premium
+      premium:user.premium
     });
   }
 
   res.json({success:false});
 });
 
-// 💰 UPGRADE (simulate payment)
-app.post("/upgrade",(req,res)=>{
+// 💳 STRIPE CHECKOUT
+app.post("/create-checkout", async (req,res)=>{
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types:["card"],
+    mode:"subscription",
+    line_items:[{
+      price:"price_XXXX", // 🔥 REPLACE WITH YOUR STRIPE PRICE ID
+      quantity:1
+    }],
+    success_url:`${process.env.DOMAIN}?success=true`,
+    cancel_url:`${process.env.DOMAIN}?cancel=true`
+  });
+
+  res.json({url:session.url});
+});
+
+// 💰 VERIFY PAYMENT (AFTER SUCCESS)
+app.post("/verify", async (req,res)=>{
   const {username} = req.body;
 
-  if(users[username]){
-    users[username].premium = true;
+  let user = await User.findOne({username});
+  if(user){
+    user.premium = true;
+    await user.save();
     return res.json({success:true});
   }
 
@@ -64,31 +108,26 @@ app.post("/upgrade",(req,res)=>{
 app.post("/generate", async (req,res)=>{
   const {prompt,type,username} = req.body;
 
-  if(!prompt){
-    return res.json({result:"Enter prompt"});
-  }
+  if(!prompt) return res.json({result:"Enter prompt"});
 
-  let user = users[username];
+  let user = await User.findOne({username});
+  if(!user) return res.json({result:"Login first"});
 
-  // 🛑 if not logged
-  if(!user){
-    return res.json({result:"Login first"});
-  }
+  resetUsage(user);
 
-  // 💸 FREE LIMIT CONTROL
-  if(!user.premium && user.usage >= FREE_LIMIT){
+  // 🚫 FREE LIMIT
+  if(!user.premium && user.usage >= 3){
     return res.json({
-      result:"🚫 Free limit reached. Upgrade to Premium ($9)"
+      result:"🚫 Free limit reached. Upgrade to Premium"
     });
   }
 
   try{
 
-    // 🧠 TEXT (CHEAP OpenAI)
-    if(type === "chat" || type === "story"){
+    // 🧠 TEXT AI (PREMIUM ONLY)
+    if(type==="chat" || type==="story"){
       if(user.premium){
 
-        // 🔥 USE OPENAI ONLY FOR PREMIUM
         const response = await fetch("https://api.openai.com/v1/chat/completions",{
           method:"POST",
           headers:{
@@ -105,31 +144,37 @@ app.post("/generate", async (req,res)=>{
         const data = await response.json();
 
         user.usage++;
+        await user.save();
 
         return res.json({
           result:data.choices?.[0]?.message?.content || "Error"
         });
 
       }else{
-        // 🆓 FREE MODE (NO COST)
         user.usage++;
+        await user.save();
+
         return res.json({
-          result:"🔥 AI says: " + prompt
+          result:"🔥 Free AI: " + prompt
         });
       }
     }
 
-    // 🖼 IMAGE (FREE API)
-    if(type === "image"){
+    // 🖼 IMAGE (FREE)
+    if(type==="image"){
       user.usage++;
+      await user.save();
+
       return res.json({
         result:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
       });
     }
 
-    // 🎬 VIDEO (FREE TEMP)
-    if(type === "video"){
+    // 🎬 VIDEO (TEMP)
+    if(type==="video"){
       user.usage++;
+      await user.save();
+
       return res.json({
         result:`https://pollinations.ai/video?prompt=${encodeURIComponent(prompt)}`
       });
@@ -144,6 +189,6 @@ app.post("/generate", async (req,res)=>{
 });
 
 // 🚀 START SERVER
-app.listen(PORT,()=>{
-  console.log("Server running on port "+PORT);
+app.listen(process.env.PORT,()=>{
+  console.log("Server running");
 });
