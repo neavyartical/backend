@@ -18,32 +18,34 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
-        input: { prompt }
+        model: "stability-ai/sdxl",   // ✅ NO version needed
+        input: {
+          prompt: prompt
+        }
       })
     });
 
-    const data = await start.json();
-    console.log("🚀 Start:", data);
+    const startData = await response.json();
+    console.log("🚀 START:", startData);
 
-    if (!data.id) {
-      return res.json({ error: data });
+    if (!startData.id) {
+      return res.json({ error: startData });
     }
 
     let result;
 
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 2000));
 
       const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${data.id}`,
+        `https://api.replicate.com/v1/predictions/${startData.id}`,
         {
           headers: {
             "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
@@ -55,11 +57,13 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
+      if (result.status === "failed") {
+        return res.json({ error: result });
+      }
     }
 
-    console.log("🎯 Result:", result);
+    console.log("🎯 RESULT:", result);
 
-    // 🔥 IMPORTANT FIX
     let outputUrl = null;
 
     if (Array.isArray(result.output)) {
@@ -69,23 +73,19 @@ app.post("/generate", async (req, res) => {
     }
 
     if (!outputUrl) {
-      return res.json({
-        error: "No output",
-        raw: result
-      });
+      return res.json({ error: result });
     }
 
-    // ✅ ALWAYS RETURN url (not video)
     res.json({
       url: outputUrl
     });
 
   } catch (err) {
     console.error(err);
-    res.json({ error: "Failed" });
+    res.json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 Backend ready");
+  console.log("🔥 FINAL BACKEND WORKING");
 });
