@@ -8,47 +8,41 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
-// Test route
 app.get("/", (req, res) => {
   res.send("ReelMind Backend is running 🚀");
 });
 
-// Generate route
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   console.log("📩 Prompt:", prompt);
 
   try {
-    // 🔥 Start prediction
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "ac732df83cea7fff5b7b6d4f8f5e4f7a0f5f2c4f6c7a2f5c4b3e6d5c7a8b9c1d",
+        version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
         input: {
-          prompt: prompt
+          prompt: prompt,
+          width: 512,
+          height: 512
         }
       })
     });
 
-    const startData = await start.json();
-    console.log("🚀 START DATA:", startData);
+    const startData = await response.json();
+    console.log("🚀 START:", startData);
 
-    // ❌ If model fails
     if (!startData.id) {
-      return res.status(500).json({
-        error: "Failed to start generation",
-        details: startData
-      });
+      return res.status(500).json({ error: startData });
     }
 
     let result;
 
-    // ⏳ Polling loop
     for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 2000));
 
@@ -65,36 +59,27 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ STATUS:", result.status);
 
       if (result.status === "succeeded") break;
-      if (result.status === "failed") {
-        throw new Error("AI generation failed");
-      }
     }
 
-    console.log("🎯 FINAL RESULT:", result);
+    console.log("🎯 RESULT:", result);
 
-    // ✅ Return output (image or video)
-    if (result.output) {
+    if (result.output && result.output.length > 0) {
       res.json({
-        video: Array.isArray(result.output)
-          ? result.output[0]
-          : result.output
+        video: result.output[0] // works with your frontend
       });
     } else {
       res.status(500).json({
-        error: "No output returned",
+        error: "No output",
         result: result
       });
     }
 
   } catch (err) {
     console.error("❌ ERROR:", err);
-    res.status(500).json({
-      error: "Generation failed"
-    });
+    res.status(500).json({ error: "Failed" });
   }
 });
 
-// Start server
 app.listen(PORT, () => {
-  console.log("🔥 BACKEND RUNNING SUCCESSFULLY");
+  console.log("🔥 FINAL BACKEND WORKING");
 });
