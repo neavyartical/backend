@@ -17,21 +17,19 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const start = await fetch(
-      "https://api.replicate.com/v1/models/stability-ai/sdxl/predictions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          input: {
-            prompt: prompt
-          }
-        })
-      }
-    );
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        version: "stability-ai/sdxl", // ✅ SAFE FORMAT
+        input: {
+          prompt: prompt
+        }
+      })
+    });
 
     const startData = await start.json();
     console.log("🚀 START:", startData);
@@ -77,11 +75,11 @@ app.post("/generate", async (req, res) => {
     res.json({ url });
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
+    console.error(err);
     res.json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 NODE 22 CLEAN BACKEND RUNNING");
+  console.log("🔥 FINAL CLEAN BACKEND");
 });
