@@ -12,19 +12,25 @@ app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// Generate image
+// ✅ SINGLE CLEAN ROUTE
 app.post("/generate", (req, res) => {
   const { prompt } = req.body;
 
   console.log("📩 Prompt:", prompt);
 
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+  try {
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-  res.json({
-    url: imageUrl
-  });
+    return res.json({
+      url: imageUrl
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.json({ error: "Failed" });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 Backend working perfectly");
+  console.log("🔥 BACKEND FIXED & WORKING");
 });
