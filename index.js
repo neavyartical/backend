@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend is running 🚀");
+  res.send("Backend running 🚀");
 });
 
 app.post("/generate", async (req, res) => {
@@ -18,7 +18,7 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
@@ -26,19 +26,15 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
-        input: {
-          prompt: prompt,
-          width: 512,
-          height: 512
-        }
+        input: { prompt }
       })
     });
 
-    const startData = await response.json();
-    console.log("🚀 START:", startData);
+    const data = await start.json();
+    console.log("🚀 Start:", data);
 
-    if (!startData.id) {
-      return res.status(500).json({ error: startData });
+    if (!data.id) {
+      return res.json({ error: data });
     }
 
     let result;
@@ -47,7 +43,7 @@ app.post("/generate", async (req, res) => {
       await new Promise(r => setTimeout(r, 2000));
 
       const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${startData.id}`,
+        `https://api.replicate.com/v1/predictions/${data.id}`,
         {
           headers: {
             "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
@@ -56,30 +52,40 @@ app.post("/generate", async (req, res) => {
       );
 
       result = await check.json();
-      console.log("⏳ STATUS:", result.status);
+      console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
     }
 
-    console.log("🎯 RESULT:", result);
+    console.log("🎯 Result:", result);
 
-    if (result.output && result.output.length > 0) {
-      res.json({
-        video: result.output[0] // works with your frontend
-      });
-    } else {
-      res.status(500).json({
+    // 🔥 IMPORTANT FIX
+    let outputUrl = null;
+
+    if (Array.isArray(result.output)) {
+      outputUrl = result.output[0];
+    } else if (typeof result.output === "string") {
+      outputUrl = result.output;
+    }
+
+    if (!outputUrl) {
+      return res.json({
         error: "No output",
-        result: result
+        raw: result
       });
     }
 
+    // ✅ ALWAYS RETURN url (not video)
+    res.json({
+      url: outputUrl
+    });
+
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).json({ error: "Failed" });
+    console.error(err);
+    res.json({ error: "Failed" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 FINAL BACKEND WORKING");
+  console.log("🔥 Backend ready");
 });
