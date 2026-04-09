@@ -18,21 +18,22 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "stability-ai/sdxl",   // ✅ NO version needed
+        // ✅ PUBLIC WORKING VERSION (Stable Diffusion)
+        version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
         input: {
           prompt: prompt
         }
       })
     });
 
-    const startData = await response.json();
+    const startData = await start.json();
     console.log("🚀 START:", startData);
 
     if (!startData.id) {
@@ -57,9 +58,6 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
-      if (result.status === "failed") {
-        return res.json({ error: result });
-      }
     }
 
     console.log("🎯 RESULT:", result);
@@ -73,7 +71,10 @@ app.post("/generate", async (req, res) => {
     }
 
     if (!outputUrl) {
-      return res.json({ error: result });
+      return res.json({
+        error: "No output",
+        raw: result
+      });
     }
 
     res.json({
