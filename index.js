@@ -18,39 +18,30 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    // 🔥 START REQUEST TO REPLICATE
-    const start = await fetch("https://api.replicate.com/v1/predictions", {
+    const response = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "83b7b2a1d0ef3b6f3a5fcd9d36c3a7c2bdfcb4a9c3bbfd7c7f0e2b1e6e9c6d6c",
+        version: "db21e45b6a8e53d2b6c5b3a3bde7cdb3c7d1b8e8d1e6c2c7e0a6c7d5f7c9f3f5",
         input: {
-          prompt: prompt,
-          fps: 8,
-          width: 512,
-          height: 512,
-          num_frames: 16
+          prompt: prompt
         }
       })
     });
 
-    const startData = await start.json();
-    console.log("🚀 Start Data:", startData);
+    const startData = await response.json();
+    console.log("🚀 Start:", startData);
 
     if (!startData.id) {
-      return res.status(500).json({
-        error: "Failed to start generation",
-        details: startData
-      });
+      return res.status(500).json({ error: startData });
     }
 
     let result;
 
-    // ⏳ WAIT LOOP
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 15; i++) {
       await new Promise(r => setTimeout(r, 2000));
 
       const check = await fetch(
@@ -66,32 +57,24 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
-      if (result.status === "failed") {
-        throw new Error("AI generation failed");
-      }
     }
 
-    console.log("🎯 FINAL RESULT:", result);
+    console.log("🎯 RESULT:", result);
 
     if (result.output) {
       res.json({
-        video: Array.isArray(result.output)
-          ? result.output[0]
-          : result.output
+        video: result.output[0] // still works with your frontend
       });
     } else {
-      res.status(500).json({
-        error: "No video returned",
-        result: result
-      });
+      res.status(500).json({ error: "No output", result });
     }
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
-    res.status(500).json({ error: "Generation failed" });
+    console.error(err);
+    res.status(500).json({ error: "Failed" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 REPLICATE VIDEO BACKEND RUNNING");
+  console.log("🔥 IMAGE AI BACKEND RUNNING");
 });
