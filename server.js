@@ -1,12 +1,9 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-const API_KEY = process.env.OPENAI_API_KEY;
 
 app.get("/", (req,res)=>{
   res.send("Backend running 🚀");
@@ -16,34 +13,22 @@ app.post("/generate", async (req, res) => {
   try {
     const { type, prompt } = req.body;
 
-    let fullPrompt = prompt;
+    let result = "";
 
-    if(type === "story") fullPrompt = "Write a long story about " + prompt;
-    if(type === "funny") fullPrompt = "Make this funny: " + prompt;
-    if(type === "sad") fullPrompt = "Make this emotional: " + prompt;
-    if(type === "anime") fullPrompt = "Anime style scene: " + prompt;
-    if(type === "money") fullPrompt = "How to make money from: " + prompt;
-    if(type === "tiktok") fullPrompt = "Create viral TikTok idea: " + prompt;
-    if(type === "video") fullPrompt = "Describe a cinematic video: " + prompt;
-    if(type === "image") fullPrompt = "Describe an image: " + prompt;
+    if(type === "story") result = "📖 Story: " + prompt + "... (AI story here)";
+    else if(type === "funny") result = "😂 Funny: " + prompt;
+    else if(type === "sad") result = "💔 Sad: " + prompt;
+    else if(type === "anime") result = "🔥 Anime: " + prompt;
+    else if(type === "money") result = "💰 Money idea: " + prompt;
+    else if(type === "tiktok") result = "🚀 TikTok idea: " + prompt;
+    else if(type === "video") result = "🎬 Video idea: " + prompt;
+    else if(type === "image") result = "🖼 Image description: " + prompt;
+    else result = "💬 Chat: " + prompt;
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        input: fullPrompt
-      })
-    });
-
-    const data = await response.json();
-
-    res.json({
-      result: data.output?.[0]?.content?.[0]?.text || "No response"
-    });
+    // simulate response delay
+    setTimeout(() => {
+      res.json({ result });
+    }, 1000);
 
   } catch (err) {
     res.json({ result: "Error: " + err.message });
