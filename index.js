@@ -7,27 +7,24 @@ const PORT = process.env.PORT || 10000;
 app.use(cors());
 app.use(express.json());
 
+// Test route
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-app.post("/generate", async (req, res) => {
+// Generate image
+app.post("/generate", (req, res) => {
   const { prompt } = req.body;
 
   console.log("📩 Prompt:", prompt);
 
-  try {
-    // ✅ FREE WORKING AI IMAGE (NO 422 EVER)
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-    res.json({ url });
-
-  } catch (err) {
-    console.error(err);
-    res.json({ error: "Failed" });
-  }
+  res.json({
+    url: imageUrl
+  });
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 CLEAN BACKEND (NO ERRORS)");
+  console.log("🔥 Backend working perfectly");
 });
