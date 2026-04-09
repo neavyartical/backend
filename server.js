@@ -5,42 +5,61 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// FREE TEXT GENERATOR (FAKE AI BUT SMART)
-function generateText(prompt, type){
-  if(type === "story"){
-    return "📖 Story: " + prompt + "...\nA powerful story unfolds with emotions and creativity.";
+// USERS (simple memory for now)
+let users = {};
+
+// LOGIN
+app.post("/login", (req,res)=>{
+  const {username,password} = req.body;
+
+  if(!users[username]){
+    users[username] = { password, premium:false };
   }
 
-  if(type === "funny"){
-    return "😂 Funny: " + prompt + " turned into something hilarious!";
+  if(users[username].password === password){
+    res.json({ success:true, premium:users[username].premium });
+  } else {
+    res.json({ success:false });
+  }
+});
+
+// VERIFY PAYMENT (SIMULATED)
+app.post("/verify", (req,res)=>{
+  const {username} = req.body;
+
+  if(users[username]){
+    users[username].premium = true;
+    return res.json({ success:true });
   }
 
-  if(type === "money"){
-    return "💰 Idea: " + prompt + " can be monetized using social media + AI tools.";
-  }
+  res.json({ success:false });
+});
 
-  return "🤖 AI Response: " + prompt;
-}
+// GENERATE
+app.post("/generate",(req,res)=>{
+  const {prompt,type} = req.body;
 
-// ROUTE
-app.post("/generate", (req,res)=>{
-  const {prompt, type} = req.body;
-
-  if(type === "image"){
+  if(type==="image"){
     return res.json({
-      result: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+      result:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
     });
   }
 
-  if(type === "video"){
+  if(type==="story"){
     return res.json({
-      result: "🎬 Free video preview mode. Upgrade for real AI video."
+      result:`📖 Story:\n${prompt}...\nAn amazing story unfolds.`
+    });
+  }
+
+  if(type==="music"){
+    return res.json({
+      result:"🎵 Music system coming soon (premium feature)"
     });
   }
 
   res.json({
-    result: generateText(prompt, type)
+    result:"🤖 AI: " + prompt
   });
 });
 
-app.listen(3000, ()=> console.log("Server running"));
+app.listen(3000, ()=>console.log("Server running"));
