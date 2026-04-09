@@ -8,6 +8,7 @@ app.use(express.json());
 
 const API_KEY = process.env.OPENAI_API_KEY;
 
+// MAIN ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { type, prompt } = req.body;
@@ -49,7 +50,7 @@ app.post("/generate", async (req, res) => {
     const data = await response.json();
 
     res.json({
-      result: data.output[0].content[0].text
+      result: data.output?.[0]?.content?.[0]?.text || "No response"
     });
 
   } catch (err) {
@@ -57,8 +58,10 @@ app.post("/generate", async (req, res) => {
   }
 });
 
+// TEST ROUTE
 app.get("/", (req,res)=>{
   res.send("Backend running 🚀");
 });
 
-app.listen(10000, ()=> console.log("Server running"));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, ()=> console.log("Server running"));
