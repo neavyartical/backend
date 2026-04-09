@@ -8,32 +8,24 @@ app.use(express.json());
 
 const API_KEY = process.env.OPENAI_API_KEY;
 
-// MAIN ROUTE
+app.get("/", (req,res)=>{
+  res.send("Backend running 🚀");
+});
+
 app.post("/generate", async (req, res) => {
   try {
     const { type, prompt } = req.body;
 
-    let fullPrompt = "";
+    let fullPrompt = prompt;
 
-    if(type === "story"){
-      fullPrompt = "Write a long emotional story about " + prompt;
-    } else if(type === "funny"){
-      fullPrompt = "Make this funny: " + prompt;
-    } else if(type === "sad"){
-      fullPrompt = "Make this sad: " + prompt;
-    } else if(type === "anime"){
-      fullPrompt = "Anime style scene: " + prompt;
-    } else if(type === "money"){
-      fullPrompt = "How to make money from: " + prompt;
-    } else if(type === "tiktok"){
-      fullPrompt = "Create viral TikTok idea: " + prompt;
-    } else if(type === "video"){
-      fullPrompt = "Describe a cinematic video scene: " + prompt;
-    } else if(type === "image"){
-      fullPrompt = "Describe an image: " + prompt;
-    } else {
-      fullPrompt = prompt;
-    }
+    if(type === "story") fullPrompt = "Write a long story about " + prompt;
+    if(type === "funny") fullPrompt = "Make this funny: " + prompt;
+    if(type === "sad") fullPrompt = "Make this emotional: " + prompt;
+    if(type === "anime") fullPrompt = "Anime style scene: " + prompt;
+    if(type === "money") fullPrompt = "How to make money from: " + prompt;
+    if(type === "tiktok") fullPrompt = "Create viral TikTok idea: " + prompt;
+    if(type === "video") fullPrompt = "Describe a cinematic video: " + prompt;
+    if(type === "image") fullPrompt = "Describe an image: " + prompt;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -56,11 +48,6 @@ app.post("/generate", async (req, res) => {
   } catch (err) {
     res.json({ result: "Error: " + err.message });
   }
-});
-
-// TEST ROUTE
-app.get("/", (req,res)=>{
-  res.send("Backend running 🚀");
 });
 
 const PORT = process.env.PORT || 10000;
