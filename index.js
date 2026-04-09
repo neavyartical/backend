@@ -18,38 +18,43 @@ app.post("/generate", async (req, res) => {
   console.log("📩 Prompt:", prompt);
 
   try {
-    const response = await fetch("https://api.replicate.com/v1/predictions", {
+    // 🔥 START REQUEST TO REPLICATE
+    const start = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        version: "a9758cbf9a7c7d6d0db1b5aefb6dc9c6c0e6d9c5d7f8b8e7c9d8f6b7a5e4c3d2",
+        version: "83b7b2a1d0ef3b6f3a5fcd9d36c3a7c2bdfcb4a9c3bbfd7c7f0e2b1e6e9c6d6c",
         input: {
-          prompt: prompt
+          prompt: prompt,
+          fps: 8,
+          width: 512,
+          height: 512,
+          num_frames: 16
         }
       })
     });
 
-    const data = await response.json();
-    console.log("FULL RESPONSE:", data);
+    const startData = await start.json();
+    console.log("🚀 Start Data:", startData);
 
-    // 🚨 IMPORTANT CHECK
-    if (!data.id) {
+    if (!startData.id) {
       return res.status(500).json({
-        error: "Replicate failed",
-        details: data
+        error: "Failed to start generation",
+        details: startData
       });
     }
 
     let result;
 
-    for (let i = 0; i < 15; i++) {
+    // ⏳ WAIT LOOP
+    for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 2000));
 
       const check = await fetch(
-        `https://api.replicate.com/v1/predictions/${data.id}`,
+        `https://api.replicate.com/v1/predictions/${startData.id}`,
         {
           headers: {
             "Authorization": `Token ${process.env.REPLICATE_API_TOKEN}`
@@ -61,8 +66,12 @@ app.post("/generate", async (req, res) => {
       console.log("⏳ Status:", result.status);
 
       if (result.status === "succeeded") break;
-      if (result.status === "failed") throw new Error("AI failed");
+      if (result.status === "failed") {
+        throw new Error("AI generation failed");
+      }
     }
+
+    console.log("🎯 FINAL RESULT:", result);
 
     if (result.output) {
       res.json({
@@ -71,7 +80,10 @@ app.post("/generate", async (req, res) => {
           : result.output
       });
     } else {
-      res.status(500).json({ error: "No output generated" });
+      res.status(500).json({
+        error: "No video returned",
+        result: result
+      });
     }
 
   } catch (err) {
@@ -81,5 +93,5 @@ app.post("/generate", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("🔥 BACKEND RUNNING");
+  console.log("🔥 REPLICATE VIDEO BACKEND RUNNING");
 });
