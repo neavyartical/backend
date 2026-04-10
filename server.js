@@ -1,87 +1,75 @@
-require("dotenv").config();
+const API = "https://YOUR-RENDER-URL.onrender.com"; // 🔁 replace this
 
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
+// ================= REGISTER =================
+async function register() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// ✅ CONNECT MONGODB
-mongoose.connect(process.env.MONGO_URL)
-.then(() => console.log("MongoDB connected"))
-.catch(err => console.log(err));
-
-// ✅ USER MODEL
-const User = mongoose.model("User", {
-  email: String,
-  password: String,
-});
-
-// 🔐 AUTH MIDDLEWARE
-const auth = (req, res, next) => {
-  const token = req.headers.authorization;
-
-  if (!token) return res.json({ result: "Login first" });
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch {
-    res.json({ result: "Invalid token" });
-  }
-};
-
-// ✅ REGISTER
-app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-
-  const hashed = await bcrypt.hash(password, 10);
-
-  const user = new User({
-    email,
-    password: hashed
+  const res = await fetch(API + "/register", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email, password })
   });
 
-  await user.save();
+  const data = await res.json();
+  alert(data.message || data.error);
+}
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-  res.json({ token });
-});
+// ================= LOGIN =================
+async function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
 
-// ✅ LOGIN
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const res = await fetch(API + "/login", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email, password })
+  });
 
-  const user = await User.findOne({ email });
-  if (!user) return res.json({ error: "User not found" });
+  const data = await res.json();
 
-  const ok = await bcrypt.compare(password, user.password);
-  if (!ok) return res.json({ error: "Wrong password" });
+  if (data.token) {
+    localStorage.setItem("token", data.token); // ✅ SAVE TOKEN
+    alert("Login successful 🚀");
+  } else {
+    alert(data.message || "Login failed");
+  }
+}
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
-  res.json({ token });
-});
+// ================= GENERATE =================
+async function generate() {
+  const prompt = document.getElementById("prompt").value;
+  const token = localStorage.getItem("token");
 
-// 🤖 GENERATE (PROTECTED)
-app.post("/generate", auth, async (req, res) => {
-  const { prompt } = req.body;
-
-  if (!prompt) {
-    return res.json({ result: "Enter prompt" });
+  if (!token) {
+    alert("Please login first ❌");
+    return;
   }
 
-  // TEMP RESPONSE (we add real AI next)
-  res.json({
-    result: "🔥 AI Response: " + prompt
+  const res = await fetch(API + "/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": token // ✅ SEND TOKEN
+    },
+    body: JSON.stringify({ prompt })
   });
-});
 
-// 🚀 START SERVER
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Server running");
-});
+  const data = await res.json();
+
+  if (data.result) {
+    document.getElementById("output").innerText = data.result;
+  } else {
+    document.getElementById("output").innerText = data.message || "Error";
+  }
+}
+
+// ================= LOGOUT =================
+function logout() {
+  localStorage.removeItem("token");
+  alert("Logged out 👋");
+}
