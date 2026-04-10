@@ -12,16 +12,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================= ENV CHECK ================= */
-if (!process.env.JWT_SECRET) {
-  console.log("❌ JWT_SECRET MISSING");
-}
-if (!process.env.MONGO_URL) {
-  console.log("❌ MONGO_URL MISSING");
-}
-if (!process.env.OPENAI_API_KEY) {
-  console.log("❌ OPENAI_API_KEY MISSING");
-}
+/* ================= DEBUG ENV ================= */
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? "LOADED ✅" : "MISSING ❌");
+console.log("MONGO_URL:", process.env.MONGO_URL ? "LOADED ✅" : "MISSING ❌");
+console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "LOADED ✅" : "MISSING ❌");
 
 /* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URL)
@@ -40,10 +34,15 @@ app.get("/", (req, res) => {
 
 /* ================= TEST TOKEN ================= */
 app.get("/test-token", (req, res) => {
+  if (!process.env.JWT_SECRET) {
+    return res.json({ error: "JWT missing ❌" });
+  }
+
   const token = jwt.sign(
     { id: "admin" },
     process.env.JWT_SECRET
   );
+
   res.json({ token });
 });
 
@@ -84,6 +83,10 @@ app.post("/register", async (req, res) => {
 /* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.json({ error: "JWT missing ❌" });
+    }
+
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
@@ -111,7 +114,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* ================= GENERATE (REAL AI) ================= */
+/* ================= GENERATE ================= */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
