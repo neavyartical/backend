@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
-import OpenAI from "openai";
+import fetch from "node-fetch";
 
 dotenv.config();
 
@@ -12,14 +12,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FULL VERSION RUNNING 🔥");
+console.log("🔥 FREE AI VERSION RUNNING 🔥");
 
-/* JWT */
+/* 🔐 JWT (HARDCODE SAFE) */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
 /* ROOT */
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀");
+  res.send("ReelMind Backend Running 🚀 (FREE AI)");
 });
 
 /* TEST TOKEN */
@@ -33,12 +33,7 @@ mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-/* OPENAI (SAFE INIT) */
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "missing_key"
-});
-
-/* MODEL */
+/* USER MODEL */
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
@@ -62,7 +57,7 @@ app.post("/register", async (req, res) => {
 
   } catch (err) {
     console.log("REGISTER ERROR:", err);
-    res.json({ error: err.message });
+    res.json({ error: "Register error ❌" });
   }
 });
 
@@ -83,11 +78,11 @@ app.post("/login", async (req, res) => {
 
   } catch (err) {
     console.log("LOGIN ERROR:", err);
-    res.json({ error: err.message });
+    res.json({ error: "Login error ❌" });
   }
 });
 
-/* GENERATE (FIXED + DEBUG) */
+/* GENERATE (FREE AI - HUGGING FACE) */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -105,27 +100,37 @@ app.post("/generate", async (req, res) => {
 
     console.log("🧠 Prompt:", prompt);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // ✅ SAFE MODEL
-      messages: [
-        {
-          role: "system",
-          content: "Create viral cinematic reel scripts with hook, scenes and storytelling."
+    const response = await fetch(
+      "https://api-inference.huggingface.co/models/bigscience/bloom",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
+          "Content-Type": "application/json"
         },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-    });
+        body: JSON.stringify({
+          inputs: `Create a viral cinematic reel script with hook, scenes and storytelling:\n${prompt}`
+        })
+      }
+    );
 
-    const result = completion.choices[0].message.content;
+    const data = await response.json();
+
+    let result = "";
+
+    if (Array.isArray(data)) {
+      result = data[0]?.generated_text || "No result";
+    } else if (data.error) {
+      result = data.error;
+    } else {
+      result = JSON.stringify(data);
+    }
 
     res.json({ result });
 
   } catch (err) {
-    console.log("🔥 AI FULL ERROR:", err);
-    res.json({ error: err.message }); // 👈 SHOW REAL ERROR
+    console.log("HF ERROR:", err);
+    res.json({ error: "Free AI error ❌" });
   }
 });
 
