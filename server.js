@@ -7,12 +7,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ ENV KEY
+// 🔐 ENV KEY (from Render)
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 console.log("KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// API ROUTE
+// TEST ROUTE
+app.get("/", (req, res) => {
+  res.send("🚀 ReelMind AI Backend Running");
+});
+
+// 🔥 MAIN GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -21,32 +26,51 @@ app.post("/generate", async (req, res) => {
       return res.json({ result: "Enter a prompt ❌" });
     }
 
+    console.log("📩 Prompt:", prompt);
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+
+        // ✅ Important headers for OpenRouter
+        "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
+        "X-Title": "ReelMind AI"
       },
       body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct",
-        messages: [{ role: "user", content: prompt }]
+        model: "openchat/openchat-3.5-0106",
+        messages: [
+          { role: "user", content: prompt }
+        ]
       })
     });
 
     const data = await response.json();
-    console.log("API:", data);
 
+    console.log("🔥 FULL API RESPONSE:", JSON.stringify(data, null, 2));
+
+    // ❌ Handle API errors
     if (data.error) {
-      return res.json({ result: "API Error ❌: " + data.error.message });
+      return res.json({
+        result: "API Error ❌: " + data.error.message
+      });
     }
 
+    // ✅ Return AI response
+    const reply = data.choices?.[0]?.message?.content;
+
     res.json({
-      result: data.choices?.[0]?.message?.content || "No response"
+      result: reply || "No response from AI"
     });
 
   } catch (err) {
-    console.error(err);
-    res.json({ result: "Server error ❌" });
+    console.error("SERVER ERROR:", err);
+
+    res.json({
+      result: "Server error ❌",
+      details: err.message
+    });
   }
 });
 
