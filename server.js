@@ -17,7 +17,7 @@ mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-// ✅ Root Route (IMPORTANT)
+// ✅ Root Route
 app.get("/", (req, res) => {
   res.send("API running 🚀");
 });
@@ -30,17 +30,14 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-// ✅ Register Route
+// ✅ Register
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = new User({
-      email,
-      password: hashed
-    });
+    const user = new User({ email, password: hashed });
 
     await user.save();
 
@@ -50,7 +47,7 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// ✅ Login Route
+// ✅ Login
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -78,7 +75,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ✅ AI Generate Route (Protected)
+// ✅ Generate (Protected)
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
