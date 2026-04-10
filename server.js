@@ -11,24 +11,41 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================= MONGO ================= */
+/* ================== CHECK ENV ================== */
+if (!process.env.JWT_SECRET) {
+  console.log("❌ JWT_SECRET MISSING");
+}
+if (!process.env.MONGO_URL) {
+  console.log("❌ MONGO_URL MISSING");
+}
+
+/* ================== MONGO ================== */
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-/* ================= ROOT ================= */
+/* ================== ROOT ================== */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* ================= MODEL ================= */
+/* ================== TEST TOKEN ================== */
+app.get("/test-token", (req, res) => {
+  const token = jwt.sign(
+    { id: "admin" },
+    process.env.JWT_SECRET || "fallback_secret"
+  );
+  res.json({ token });
+});
+
+/* ================== MODEL ================== */
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
 const User = mongoose.model("User", userSchema);
 
-/* ================= REGISTER ================= */
+/* ================== REGISTER ================== */
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -40,46 +57,54 @@ app.post("/register", async (req, res) => {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const user = new User({ email, password: hashed });
+    const user = new User({
+      email,
+      password: hashed
+    });
+
     await user.save();
 
-    res.json({ message: "Registered successfully ✅" });
+    res.json({ message: "User registered ✅" });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Register error ❌" });
+    console.log("REGISTER ERROR:", err);
+    res.json({ error: "Register error ❌" });
   }
 });
 
-/* ================= LOGIN ================= */
+/* ================== LOGIN ================== */
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log("LOGIN TRY:", email);
+
     const user = await User.findOne({ email });
+
     if (!user) {
       return res.json({ error: "User not found ❌" });
     }
 
     const match = await bcrypt.compare(password, user.password);
+
     if (!match) {
       return res.json({ error: "Wrong password ❌" });
     }
 
     const token = jwt.sign(
       { id: user._id },
-      process.env.JWT_SECRET
+      process.env.JWT_SECRET || "fallback_secret"
     );
 
     res.json({ token });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Login error ❌" });
+    console.log("LOGIN ERROR:", err);
+    res.json({ error: "Login error ❌" });
   }
 });
 
-/* ================= GENERATE ================= */
+/* ================== GENERATE ================== */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -89,7 +114,7 @@ app.post("/generate", async (req, res) => {
     }
 
     try {
-      jwt.verify(token, process.env.JWT_SECRET);
+      jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
     } catch {
       return res.json({ error: "Invalid token ❌" });
     }
@@ -100,28 +125,18 @@ app.post("/generate", async (req, res) => {
       return res.json({ error: "No prompt ❌" });
     }
 
-    // 🔥 MOCK AI (NO API NEEDED — ALWAYS WORKS)
-    const result = `🎬 AI Script:\n\n"${prompt}"\n\n🔥 This would be a viral cinematic reel idea with engaging scenes, dramatic transitions and storytelling.`
+    // 🔥 ALWAYS WORKING AI (mock)
+    const result = `🎬 ReelMind Output:\n\n"${prompt}"\n\n🔥 Cinematic viral idea with storytelling, hooks and engagement.`
 
     res.json({ result });
 
   } catch (err) {
-    console.log(err);
+    console.log("GENERATE ERROR:", err);
     res.json({ error: "Server error ❌" });
   }
 });
 
-/* ================= TEST TOKEN ================= */
-app.get("/test-token", (req, res) => {
-  const token = jwt.sign(
-    { id: "admin" },
-    process.env.JWT_SECRET
-  );
-
-  res.json({ token });
-});
-
-/* ================= START ================= */
+/* ================== START ================== */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
