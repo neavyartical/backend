@@ -7,12 +7,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 ENV KEY
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 console.log("🔐 KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// 🚀 GENERATE ROUTE
+// 🚀 GENERATE ROUTE (OPTIMIZED)
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -28,17 +27,27 @@ app.post("/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        // ✅ WORKING MODEL (FIXED)
         model: "meta-llama/llama-3-8b-instruct",
+
+        // ⚡ SPEED OPTIMIZATION
+        max_tokens: 400,
+        temperature: 0.8,
 
         messages: [
           {
             role: "system",
-            content: "You are a viral TikTok content creator. Always generate multiple engaging ideas."
+            content: "You are ReelMind AI. Generate short, fast, high-impact viral ideas."
           },
           {
             role: "user",
-            content: `Create 3 viral TikTok ideas about: ${prompt}. Include title, hook, and short script for each.`
+            content: `Give me 3 FAST viral TikTok ideas about: ${prompt}.
+            
+Each idea must include:
+- Title
+- Hook
+- 2-line script ONLY
+            
+Keep it short, punchy, and viral.`
           }
         ]
       })
@@ -46,27 +55,20 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("📦 API RESPONSE:", data);
-
-    // ❌ HANDLE ERROR
     if (data.error) {
-      return res.json({
-        result: "API Error ❌: " + data.error.message
-      });
+      return res.json({ result: "API Error ❌: " + data.error.message });
     }
 
-    // ✅ SUCCESS
     res.json({
       result: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
-    console.error("🔥 SERVER ERROR:", err);
+    console.error(err);
     res.json({ result: "Server error ❌" });
   }
 });
 
-// 🌐 START SERVER
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
