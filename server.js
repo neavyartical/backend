@@ -7,10 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ USE ENV KEY (Render Environment Variable)
+// 🔐 ENV KEY
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("🔐 KEY STATUS:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
+console.log("🔐 KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
 // 🚀 GENERATE ROUTE
 app.post("/generate", async (req, res) => {
@@ -21,41 +21,43 @@ app.post("/generate", async (req, res) => {
       return res.json({ result: "Enter a prompt ❌" });
     }
 
-    // 🔥 CALL OPENROUTER (FIXED MODEL)
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://reelmind-ai.app", // optional but recommended
-        "X-Title": "ReelMind AI"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openchat/openchat-3.5-1210", // ✅ WORKING MODEL
+        // ✅ WORKING MODEL (FIXED)
+        model: "meta-llama/llama-3-8b-instruct",
+
         messages: [
           {
             role: "system",
-            content: "You are a viral TikTok content creator. Generate multiple viral ideas with titles, hooks, scripts, and hashtags."
+            content: "You are a viral TikTok content creator. Always generate multiple engaging ideas."
           },
           {
             role: "user",
-            content: `Give me 3 viral TikTok ideas about: ${prompt}`
+            content: `Create 3 viral TikTok ideas about: ${prompt}. Include title, hook, and short script for each.`
           }
         ]
       })
     });
 
     const data = await response.json();
+
     console.log("📦 API RESPONSE:", data);
 
+    // ❌ HANDLE ERROR
     if (data.error) {
-      return res.json({ result: "API Error ❌: " + data.error.message });
+      return res.json({
+        result: "API Error ❌: " + data.error.message
+      });
     }
 
-    const output = data.choices?.[0]?.message?.content;
-
+    // ✅ SUCCESS
     res.json({
-      result: output || "No response from AI"
+      result: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
