@@ -11,7 +11,6 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 console.log("🔐 KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// 🚀 GENERATE ROUTE (OPTIMIZED)
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -29,25 +28,37 @@ app.post("/generate", async (req, res) => {
       body: JSON.stringify({
         model: "meta-llama/llama-3-8b-instruct",
 
-        // ⚡ SPEED OPTIMIZATION
-        max_tokens: 400,
-        temperature: 0.8,
+        // ⚡ BALANCED SPEED + QUALITY
+        max_tokens: 800,
+        temperature: 0.9,
 
         messages: [
           {
             role: "system",
-            content: "You are ReelMind AI. Generate short, fast, high-impact viral ideas."
+            content: "You are ReelMind AI PRO. You create cinematic, viral, emotional content."
           },
           {
             role: "user",
-            content: `Give me 3 FAST viral TikTok ideas about: ${prompt}.
-            
-Each idea must include:
+            content: `
+Topic: ${prompt}
+
+Generate:
+
+🎬 5 Viral Story Ideas (DETAILED)
+Each must include:
 - Title
-- Hook
-- 2-line script ONLY
-            
-Keep it short, punchy, and viral.`
+- Hook (very strong)
+- Concept explanation
+- Short cinematic script (3–5 lines)
+
+🎤 Voiceover Script (full narration)
+
+🖼 Image Prompt (for thumbnail)
+
+📱 Caption + Hashtags
+
+Make everything emotional, addictive, and social-media ready.
+`
           }
         ]
       })
