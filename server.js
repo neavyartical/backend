@@ -10,17 +10,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ Mongo (optional but safe)
+// ✅ MongoDB
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌", err));
 
-// ✅ ROOT
+// ✅ ROOT (VERSION CHECK)
 app.get("/", (req, res) => {
-  res.send("API running 🚀");
+  res.send("NEW VERSION 🚀");
 });
 
-// ✅ TEST TOKEN (THIS IS WHAT YOU WANT)
+// ✅ TEST TOKEN ROUTE
 app.get("/test-token", (req, res) => {
   if (!process.env.JWT_SECRET) {
     return res.send("JWT missing ❌");
@@ -35,7 +35,7 @@ app.get("/test-token", (req, res) => {
   res.json({ token });
 });
 
-// ✅ START
+// ✅ START SERVER
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
