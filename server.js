@@ -12,19 +12,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================= DEBUG ================= */
-console.log("JWT_SECRET:", process.env.JWT_SECRET ? "LOADED ✅" : "MISSING ❌");
+/* ================= HARD FIX JWT ================= */
+const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
-/* ================= CHECK ENV ROUTE ================= */
-app.get("/check-env", (req, res) => {
-  res.json({
-    jwt: process.env.JWT_SECRET || "NOT FOUND ❌",
-  });
-});
+/* ================= DEBUG ================= */
+console.log("JWT HARD MODE ✅");
 
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
+});
+
+/* ================= TEST TOKEN ================= */
+app.get("/test-token", (req, res) => {
+  const token = jwt.sign(
+    { id: "admin" },
+    JWT_SECRET
+  );
+
+  res.json({ token });
 });
 
 /* ================= MONGO ================= */
@@ -35,20 +41,6 @@ mongoose.connect(process.env.MONGO_URL)
 /* ================= OPENAI ================= */
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
-
-/* ================= TEST TOKEN ================= */
-app.get("/test-token", (req, res) => {
-  if (!process.env.JWT_SECRET) {
-    return res.json({ error: "JWT missing ❌" });
-  }
-
-  const token = jwt.sign(
-    { id: "admin" },
-    process.env.JWT_SECRET
-  );
-
-  res.json({ token });
 });
 
 /* ================= MODEL ================= */
@@ -88,10 +80,6 @@ app.post("/register", async (req, res) => {
 /* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
   try {
-    if (!process.env.JWT_SECRET) {
-      return res.json({ error: "JWT missing ❌" });
-    }
-
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
@@ -108,7 +96,7 @@ app.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      process.env.JWT_SECRET
+      JWT_SECRET
     );
 
     res.json({ token });
@@ -129,7 +117,7 @@ app.post("/generate", async (req, res) => {
     }
 
     try {
-      jwt.verify(token, process.env.JWT_SECRET);
+      jwt.verify(token, JWT_SECRET);
     } catch {
       return res.json({ error: "Invalid token ❌" });
     }
