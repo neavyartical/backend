@@ -12,10 +12,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================= DEBUG ENV ================= */
+/* ================= DEBUG ================= */
 console.log("JWT_SECRET:", process.env.JWT_SECRET ? "LOADED ✅" : "MISSING ❌");
-console.log("MONGO_URL:", process.env.MONGO_URL ? "LOADED ✅" : "MISSING ❌");
-console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "LOADED ✅" : "MISSING ❌");
+
+/* ================= CHECK ENV ROUTE ================= */
+app.get("/check-env", (req, res) => {
+  res.json({
+    jwt: process.env.JWT_SECRET || "NOT FOUND ❌",
+  });
+});
+
+/* ================= ROOT ================= */
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend Running 🚀");
+});
 
 /* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URL)
@@ -25,11 +35,6 @@ mongoose.connect(process.env.MONGO_URL)
 /* ================= OPENAI ================= */
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
-
-/* ================= ROOT ================= */
-app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀");
 });
 
 /* ================= TEST TOKEN ================= */
