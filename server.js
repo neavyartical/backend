@@ -1,30 +1,34 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+
+dotenv.config(); // ✅ VERY IMPORTANT (loads env variables)
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// ✅ MUST MATCH RENDER ENV VARIABLE NAME
+// ✅ READ ENV KEY
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🔍 Debug log
+// 🔍 DEBUG (shows real value)
+console.log("ENV KEY VALUE:", process.env.OPENROUTER_API_KEY);
 console.log("OPENROUTER_API_KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// ✅ TEST ROUTE
+// TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend Working");
+  res.send("🚀 Backend working");
 });
 
-// ✅ GENERATE ROUTE
+// GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     if (!prompt) {
-      return res.json({ result: "Enter a prompt first" });
+      return res.json({ result: "Enter prompt first" });
     }
 
     if (!OPENROUTER_API_KEY) {
@@ -47,22 +51,10 @@ app.post("/generate", async (req, res) => {
 
     console.log("API RESPONSE:", data);
 
-    const output =
-      data?.choices?.[0]?.message?.content ||
-      data?.error?.message ||
-      "No response";
-
-    res.json({ result: output });
+    res.json({
+      result: data?.choices?.[0]?.message?.content || "No response"
+    });
 
   } catch (err) {
-    console.error("SERVER ERROR:", err);
-    res.json({ result: "Server error ❌" });
-  }
-});
-
-// ✅ START SERVER
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+    console.error(err);
+    res.json({ result: "Server error ❌
