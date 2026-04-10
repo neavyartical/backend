@@ -30,8 +30,8 @@ app.post("/register", async (req, res) => {
     const { email, password } = req.body;
 
     const hashed = await bcrypt.hash(password, 10);
-
     const user = new User({ email, password: hashed });
+
     await user.save();
 
     res.json({ message: "User registered" });
@@ -63,12 +63,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ✅ PROTECTED ROUTE (TEST)
-app.get("/me", (req, res) => {
-  res.json({ message: "Protected route works" });
-});
-
-// ✅ ROOT TEST
+// ✅ TEST ROUTE
 app.get("/", (req, res) => {
   res.send("API is running 🚀");
 });
