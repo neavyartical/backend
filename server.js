@@ -4,22 +4,14 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
-import Stripe from "stripe";
 
 dotenv.config();
 
 const app = express();
-
-/* ================= STRIPE ================= */
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-/* ================= IMPORTANT MIDDLEWARE ================= */
-// ⚠️ ORDER MATTERS FOR STRIPE WEBHOOK
-app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FULL SaaS Backend Running 🔥");
+console.log("🔥 ReelMind SAFE FULL BACKEND RUNNING 🔥");
 
 /* ================= JWT ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
@@ -27,7 +19,6 @@ const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 /* ================= DEBUG ================= */
 console.log("MONGO:", process.env.MONGO_URL ? "OK ✅" : "MISSING ❌");
 console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY ? "OK ✅" : "MISSING ❌");
-console.log("STRIPE:", process.env.STRIPE_SECRET_KEY ? "OK ✅" : "MISSING ❌");
 
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
@@ -44,7 +35,8 @@ const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   credits: { type: Number, default: 10 },
-  lastReset: { type: Date, default: Date.now }
+  lastReset: { type: Date, default: Date.now },
+  isPremium: { type: Boolean, default: false }
 });
 
 const User = mongoose.model("User", userSchema);
@@ -84,7 +76,8 @@ app.post("/login", async (req, res) => {
 
     res.json({
       token,
-      credits: user.credits
+      credits: user.credits,
+      isPremium: user.isPremium
     });
 
   } catch {
@@ -116,11 +109,10 @@ app.post("/generate", async (req, res) => {
       user.credits = 10;
       user.lastReset = now;
       await user.save();
-      console.log("🔄 Credits reset");
     }
 
-    // 🚨 CHECK CREDITS
-    if (user.credits <= 0) {
+    // 🚨 CREDIT CHECK (skip if premium)
+    if (!user.isPremium && user.credits <= 0) {
       return res.json({ error: "No credits left ❌" });
     }
 
@@ -132,9 +124,7 @@ app.post("/generate", async (req, res) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://reelmind.app",
-        "X-Title": "ReelMind AI"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "meta-llama/llama-3-8b-instruct",
@@ -158,13 +148,16 @@ app.post("/generate", async (req, res) => {
       return res.json({ error: "AI failed ❌" });
     }
 
-    // ➖ DEDUCT CREDIT
-    user.credits -= 1;
-    await user.save();
+    // ➖ DEDUCT CREDIT (only if not premium)
+    if (!user.isPremium) {
+      user.credits -= 1;
+      await user.save();
+    }
 
     res.json({
       result: data.choices[0].message.content,
-      credits: user.credits
+      credits: user.credits,
+      isPremium: user.isPremium
     });
 
   } catch (err) {
@@ -173,76 +166,47 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
-app.post("/create-checkout-session", async (req, res) => {
+/* ================= MOCK PLANS (SAFE) ================= */
+/* These simulate Stripe so app never breaks */
+
+app.post("/buy-plan", async (req, res) => {
   try {
     const token = req.headers.authorization;
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      metadata: {
-        userId: decoded.id
-      },
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "100 AI Credits"
-            },
-            unit_amount: 500
-          },
-          quantity: 1
-        }
-      ],
-      success_url: "https://your-frontend.com/success",
-      cancel_url: "https://your-frontend.com/cancel"
-    });
+    const { plan } = req.body;
+    const user = await User.findById(decoded.id);
 
-    res.json({ url: session.url });
+    if (plan === "basic") user.credits += 100;
+    if (plan === "pro") user.credits += 300;
+    if (plan === "ultimate") user.credits += 1000;
 
-  } catch (err) {
-    console.log(err);
-    res.json({ error: "Payment error ❌" });
+    await user.save();
+
+    res.json({ credits: user.credits });
+
+  } catch {
+    res.json({ error: "Plan purchase failed ❌" });
   }
 });
 
-/* ================= STRIPE WEBHOOK ================= */
-app.post("/stripe-webhook", async (req, res) => {
-  const sig = req.headers["stripe-signature"];
+/* ================= MOCK PREMIUM ================= */
 
-  let event;
-
+app.post("/go-premium", async (req, res) => {
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.log("Webhook error:", err.message);
-    return res.status(400).send("Webhook Error");
+    const token = req.headers.authorization;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await User.findById(decoded.id);
+
+    user.isPremium = true;
+    await user.save();
+
+    res.json({ message: "Premium activated 🔥" });
+
+  } catch {
+    res.json({ error: "Premium failed ❌" });
   }
-
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const userId = session.metadata.userId;
-
-    try {
-      const user = await User.findById(userId);
-      if (user) {
-        user.credits += 100;
-        await user.save();
-        console.log("💰 Credits added via Stripe");
-      }
-    } catch (err) {
-      console.log("DB error:", err);
-    }
-  }
-
-  res.json({ received: true });
 });
 
 /* ================= START ================= */
