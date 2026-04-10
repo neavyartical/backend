@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 TEMP API KEY (you already set it)
+// 🔥 PUT YOUR KEY HERE
 const OPENROUTER_API_KEY = "PASTE_YOUR_KEY_HERE";
 
 // Fix path
@@ -20,7 +20,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 console.log("OPENROUTER:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// AI route
+// API ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -45,11 +45,11 @@ app.post("/generate", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Error occurred" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// Start server
+// START SERVER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
