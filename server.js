@@ -10,28 +10,25 @@ dotenv.config();
 
 const app = express();
 
-// ✅ MIDDLEWARE
+// ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// ✅ DEBUG ENV
+// ✅ Debug ENV
 console.log("MONGO_URL:", process.env.MONGO_URL ? "OK" : "MISSING");
 console.log("JWT_SECRET:", process.env.JWT_SECRET ? "OK" : "MISSING");
 
-// ✅ MONGO CONNECT
+// ✅ MongoDB Connection
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
-  .catch(err => {
-    console.log("Mongo ERROR ❌");
-    console.log(err);
-  });
+  .catch(err => console.log("Mongo ERROR ❌", err));
 
-// ✅ ROOT
+// ✅ Root
 app.get("/", (req, res) => {
   res.send("API running 🚀");
 });
 
-// ✅ USER MODEL
+// ✅ User Schema
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
@@ -39,11 +36,9 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-// ✅ REGISTER
+// ✅ Register
 app.post("/register", async (req, res) => {
   try {
-    console.log("Register:", req.body);
-
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -51,18 +46,14 @@ app.post("/register", async (req, res) => {
     }
 
     const existing = await User.findOne({ email });
-
     if (existing) {
       return res.status(400).json({ error: "User exists ❌" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
-
     const user = new User({ email, password: hashed });
 
     await user.save();
-
-    console.log("User saved ✅");
 
     res.json({ message: "User registered ✅" });
 
@@ -72,11 +63,9 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// ✅ LOGIN
+// ✅ Login
 app.post("/login", async (req, res) => {
   try {
-    console.log("Login:", req.body);
-
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -105,8 +94,6 @@ app.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log("Login success ✅");
-
     res.json({ token });
 
   } catch (err) {
@@ -115,7 +102,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// ✅ GENERATE (PROTECTED)
+// ✅ Generate (Protected AI)
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -162,7 +149,18 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// ✅ START SERVER
+// ✅ 🔥 TEST TOKEN ROUTE (NO LOGIN NEEDED)
+app.get("/test-token", (req, res) => {
+  const token = jwt.sign(
+    { id: "admin123", role: "admin" },
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+
+  res.json({ token });
+});
+
+// ✅ Start Server
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
