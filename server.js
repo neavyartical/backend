@@ -1,104 +1,90 @@
 import express from "express";
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
+
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json());
 
-const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
+/* 🔥 IMPORTANT (SERVES FRONTEND) */
+app.use(express.static("public"));
 
-/* ================= DB ================= */
-mongoose.connect(process.env.MONGO_URL)
-.then(()=>console.log("MongoDB ✅"))
-.catch(err=>console.log(err));
+const PORT = process.env.PORT || 3000;
 
-/* ================= MODEL ================= */
-const User = mongoose.model("User", new mongoose.Schema({
-  email:String,
-  password:String,
-  projects:[{
-    title:String,
-    content:String,
-    video:String
-  }]
-}));
+/* ================= DEBUG ================= */
+console.log("OPENROUTER_KEY:", process.env.OPENROUTER_KEY ? "LOADED ✅" : "MISSING ❌");
 
-/* ================= AUTH ================= */
-app.post("/register", async(req,res)=>{
-  const {email,password}=req.body;
-
-  const exist = await User.findOne({email});
-  if(exist) return res.json({error:"User exists"});
-
-  const hash = await bcrypt.hash(password,10);
-  await new User({email,password:hash}).save();
-
-  res.json({message:"Registered"});
+/* ================= ROOT ================= */
+app.get("/", (req, res) => {
+  res.send("ReelMind AI Backend Running 🚀");
 });
 
-app.post("/login", async(req,res)=>{
-  const {email,password}=req.body;
+/* ================= AI GENERATION ================= */
+app.post("/generate", async (req, res) => {
+  try {
+    const { prompt } = req.body;
 
-  const user = await User.findOne({email});
-  if(!user) return res.json({error:"No user"});
+    if (!prompt) {
+      return res.json({ error: "No prompt provided" });
+    }
 
-  const ok = await bcrypt.compare(password,user.password);
-  if(!ok) return res.json({error:"Wrong password"});
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + process.env.OPENROUTER_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: "You are a viral content creator AI." },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
 
-  const token = jwt.sign({id:user._id},JWT_SECRET);
+    const data = await response.json();
+
+    console.log("AI RESPONSE:", data);
+
+    res.json({
+      result: data.choices?.[0]?.message?.content || "No response from AI"
+    });
+
+  } catch (err) {
+    console.error("AI ERROR:", err);
+    res.json({ error: "AI failed" });
+  }
+});
+
+/* ================= BUY PLAN ================= */
+app.post("/buy-plan", (req, res) => {
+  const { plan } = req.body;
+
+  let credits = 0;
+
+  if (plan === "basic") credits = 100;
+  if (plan === "pro") credits = 300;
+  if (plan === "ultimate") credits = 1000;
 
   res.json({
-    token,
-    projects:user.projects
+    message: "Plan activated",
+    credits
   });
 });
 
-/* ================= SAVE PROJECT ================= */
-app.post("/save-project", async(req,res)=>{
-  const token=req.headers.authorization;
-  const decoded=jwt.verify(token,JWT_SECRET);
-
-  const user=await User.findById(decoded.id);
-
-  const {title,content,video}=req.body;
-
-  user.projects.push({title,content,video});
-  await user.save();
-
-  res.json({projects:user.projects});
-});
-
-/* ================= AI ================= */
-app.post("/generate", async(req,res)=>{
-  const token=req.headers.authorization;
-  const decoded=jwt.verify(token,JWT_SECRET);
-
-  const {prompt}=req.body;
-
-  const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-    method:"POST",
-    headers:{
-      "Authorization":"Bearer "+process.env.OPENROUTER_API_KEY,
-      "Content-Type":"application/json"
-    },
-    body:JSON.stringify({
-      model:"meta-llama/llama-3-8b-instruct",
-      messages:[{role:"user",content:prompt}]
-    })
-  });
-
-  const data=await r.json();
-
+/* ================= ENV CHECK ================= */
+app.get("/check-env", (req, res) => {
   res.json({
-    result:data.choices?.[0]?.message?.content || "AI error"
+    openrouter: process.env.OPENROUTER_KEY ? "OK" : "MISSING"
   });
 });
 
 /* ================= START ================= */
-app.listen(5000,()=>console.log("Server running 🚀"));
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port", PORT);
+});
