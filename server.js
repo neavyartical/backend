@@ -7,17 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 ENV KEY (from Render)
+// ✅ GET API KEY FROM ENV
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
+console.log("KEY STATUS:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend Running");
-});
-
-// 🔥 MAIN GENERATE ROUTE
+// ✅ API ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -26,20 +21,14 @@ app.post("/generate", async (req, res) => {
       return res.json({ result: "Enter a prompt ❌" });
     }
 
-    console.log("📩 Prompt:", prompt);
-
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-
-        // ✅ Important headers for OpenRouter
-        "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
-        "X-Title": "ReelMind AI"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openchat/openchat-3.5-0106",
+        model: "mistralai/mistral-7b-instruct", // ✅ FIXED MODEL
         messages: [
           { role: "user", content: prompt }
         ]
@@ -47,34 +36,25 @@ app.post("/generate", async (req, res) => {
     });
 
     const data = await response.json();
+    console.log("API RESPONSE:", data);
 
-    console.log("🔥 FULL API RESPONSE:", JSON.stringify(data, null, 2));
-
-    // ❌ Handle API errors
     if (data.error) {
       return res.json({
         result: "API Error ❌: " + data.error.message
       });
     }
 
-    // ✅ Return AI response
-    const reply = data.choices?.[0]?.message?.content;
-
     res.json({
-      result: reply || "No response from AI"
+      result: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
-    console.error("SERVER ERROR:", err);
-
-    res.json({
-      result: "Server error ❌",
-      details: err.message
-    });
+    console.error(err);
+    res.json({ result: "Server error ❌" });
   }
 });
 
-// START SERVER
+// ✅ START SERVER
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
