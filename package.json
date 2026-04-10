@@ -1,17 +1,22 @@
 {
-  "name": "reelmind-backend",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.0",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.0"
-  }
+  "name": "ReelMind AI",
+  "short_name": "ReelMind",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00ffcc",
+  "orientation": "portrait",
+  "description": "Create viral videos, images and AI content instantly.",
+  "icons": [
+    {
+      "src": "https://i.imgur.com/6VBx3io.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.imgur.com/6VBx3io.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
