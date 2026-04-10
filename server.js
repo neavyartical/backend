@@ -15,13 +15,15 @@ mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌", err));
 
-// ✅ ROOT (VERSION CHECK)
+// ✅ ROOT
 app.get("/", (req, res) => {
   res.send("NEW VERSION 🚀");
 });
 
-// ✅ TEST TOKEN ROUTE
+// ✅ TEST TOKEN (MUST WORK)
 app.get("/test-token", (req, res) => {
+  console.log("HIT TEST TOKEN ✅");
+
   if (!process.env.JWT_SECRET) {
     return res.send("JWT missing ❌");
   }
@@ -35,7 +37,7 @@ app.get("/test-token", (req, res) => {
   res.json({ token });
 });
 
-// ✅ START SERVER
+// ✅ START SERVER (ALWAYS LAST)
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
