@@ -11,17 +11,20 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Fix __dirname for ES modules
+// 🔥 YOUR API KEY (TEMPORARY)
+const OPENROUTER_API_KEY = "PASTE_YOUR_NEW_KEY_HERE";
+
+// Fix __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// Check API key
-console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
+// Check key
+console.log("OPENROUTER:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// AI GENERATION ROUTE
+// ✅ GENERATION ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -29,11 +32,11 @@ app.post("/generate", async (req, res) => {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
+        model: "mistralai/mistral-7b-instruct",
         messages: [
           { role: "user", content: prompt }
         ]
@@ -42,17 +45,19 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
 
+    console.log("API RESPONSE:", data);
+
     res.json({
       result: data.choices?.[0]?.message?.content || "No response"
     });
 
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error("ERROR:", error);
     res.status(500).json({ error: "Generation failed" });
   }
 });
 
-// START SERVER
+// Start server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
