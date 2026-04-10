@@ -14,17 +14,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ✅ MONGODB CONNECTION
+// ✅ DEBUG: check env
+console.log("MONGO_URL:", process.env.MONGO_URL ? "Loaded ✅" : "Missing ❌");
+console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Loaded ✅" : "Missing ❌");
+
+// ✅ MONGO CONNECT (FULL ERROR LOG)
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
-  .catch(err => console.log("Mongo error ❌:", err));
+  .catch(err => {
+    console.log("❌ MongoDB ERROR:");
+    console.log(err);
+  });
 
-// ✅ ROOT ROUTE
+// ✅ ROOT
 app.get("/", (req, res) => {
   res.send("API running 🚀");
 });
 
-// ✅ USER SCHEMA
+// ✅ USER MODEL
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
@@ -32,35 +39,41 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("User", userSchema);
 
-// ✅ REGISTER
+// ✅ REGISTER (FULL DEBUG)
 app.post("/register", async (req, res) => {
   try {
-    const email = req.body.email;
-    const password = req.body.password;
+    console.log("Register request:", req.body);
+
+    const { email, password } = req.body;
 
     if (!email || !password) {
+      console.log("❌ Missing fields");
       return res.status(400).json({ error: "Missing fields ❌" });
     }
 
-    // check if user exists
     const existing = await User.findOne({ email });
+
     if (existing) {
+      console.log("❌ User exists");
       return res.status(400).json({ error: "User already exists ❌" });
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
     const user = new User({
-      email: email,
+      email,
       password: hashed
     });
 
     await user.save();
 
+    console.log("✅ User saved");
+
     res.json({ message: "User registered ✅" });
 
   } catch (err) {
-    console.log("Register error:", err);
+    console.log("❌ REGISTER ERROR:");
+    console.log(err);
     res.status(500).json({ error: "Register failed ❌" });
   }
 });
@@ -68,35 +81,38 @@ app.post("/register", async (req, res) => {
 // ✅ LOGIN
 app.post("/login", async (req, res) => {
   try {
-    const email = req.body.email;
-    const password = req.body.password;
+    console.log("Login request:", req.body);
+
+    const { email, password } = req.body;
 
     const user = await User.findOne({ email });
 
     if (!user) {
+      console.log("❌ User not found");
       return res.status(400).json({ error: "User not found ❌" });
     }
 
     const valid = await bcrypt.compare(password, user.password);
 
     if (!valid) {
+      console.log("❌ Wrong password");
       return res.status(400).json({ error: "Wrong password ❌" });
     }
 
-    const token = jwt.sign(
-      { id: user._id },
-      process.env.JWT_SECRET
-    );
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+
+    console.log("✅ Login success");
 
     res.json({ token });
 
   } catch (err) {
-    console.log("Login error:", err);
+    console.log("❌ LOGIN ERROR:");
+    console.log(err);
     res.status(500).json({ error: "Login failed ❌" });
   }
 });
 
-// ✅ GENERATE (PROTECTED)
+// ✅ GENERATE
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -107,7 +123,7 @@ app.post("/generate", async (req, res) => {
 
     try {
       jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
+    } catch (err) {
       return res.status(401).json({ error: "Invalid token ❌" });
     }
 
@@ -117,7 +133,8 @@ app.post("/generate", async (req, res) => {
       return res.status(400).json({ error: "No prompt ❌" });
     }
 
-    // 🔥 AI REQUEST
+    console.log("AI prompt:", prompt);
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -132,6 +149,8 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
 
+    console.log("AI response:", data);
+
     const result =
       data.choices?.[0]?.message?.content ||
       "No response";
@@ -139,12 +158,13 @@ app.post("/generate", async (req, res) => {
     res.json({ result });
 
   } catch (err) {
-    console.log("Generate error:", err);
+    console.log("❌ GENERATE ERROR:");
+    console.log(err);
     res.status(500).json({ error: "AI failed ❌" });
   }
 });
 
-// ✅ START SERVER
+// ✅ START
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
