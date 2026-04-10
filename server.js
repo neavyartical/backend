@@ -12,10 +12,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* 🔥 CONFIRM VERSION */
-console.log("🔥 ROOT VERSION RUNNING 🔥");
+console.log("🔥 FULL VERSION RUNNING 🔥");
 
-/* 🔥 HARDCODE JWT */
+/* JWT */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
 /* ROOT */
@@ -34,9 +33,9 @@ mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-/* OPENAI */
+/* OPENAI (SAFE INIT) */
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY || "missing_key"
 });
 
 /* MODEL */
@@ -62,8 +61,8 @@ app.post("/register", async (req, res) => {
     res.json({ message: "Registered ✅" });
 
   } catch (err) {
-    console.log(err);
-    res.json({ error: "Register error ❌" });
+    console.log("REGISTER ERROR:", err);
+    res.json({ error: err.message });
   }
 });
 
@@ -83,12 +82,12 @@ app.post("/login", async (req, res) => {
     res.json({ token });
 
   } catch (err) {
-    console.log(err);
-    res.json({ error: "Login error ❌" });
+    console.log("LOGIN ERROR:", err);
+    res.json({ error: err.message });
   }
 });
 
-/* GENERATE */
+/* GENERATE (FIXED + DEBUG) */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -104,21 +103,29 @@ app.post("/generate", async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.json({ error: "No prompt ❌" });
 
+    console.log("🧠 Prompt:", prompt);
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-3.5-turbo", // ✅ SAFE MODEL
       messages: [
-        { role: "system", content: "Create viral reel scripts." },
-        { role: "user", content: prompt }
+        {
+          role: "system",
+          content: "Create viral cinematic reel scripts with hook, scenes and storytelling."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
       ],
     });
 
-    res.json({
-      result: completion.choices[0].message.content
-    });
+    const result = completion.choices[0].message.content;
+
+    res.json({ result });
 
   } catch (err) {
-    console.log(err);
-    res.json({ error: "AI error ❌" });
+    console.log("🔥 AI FULL ERROR:", err);
+    res.json({ error: err.message }); // 👈 SHOW REAL ERROR
   }
 });
 
