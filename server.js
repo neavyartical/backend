@@ -1,30 +1,26 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 YOUR API KEY (TEMPORARY)
-const OPENROUTER_API_KEY = "PASTE_YOUR_NEW_KEY_HERE";
+// 🔥 TEMP API KEY (you already set it)
+const OPENROUTER_API_KEY = "PASTE_YOUR_KEY_HERE";
 
-// Fix __dirname
+// Fix path
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// Check key
 console.log("OPENROUTER:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// ✅ GENERATION ROUTE
+// AI route
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -37,23 +33,19 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model: "mistralai/mistral-7b-instruct",
-        messages: [
-          { role: "user", content: prompt }
-        ]
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
 
-    console.log("API RESPONSE:", data);
-
     res.json({
       result: data.choices?.[0]?.message?.content || "No response"
     });
 
-  } catch (error) {
-    console.error("ERROR:", error);
-    res.status(500).json({ error: "Generation failed" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error occurred" });
   }
 });
 
