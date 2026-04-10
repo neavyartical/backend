@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
-import fetch from "node-fetch";
 
 dotenv.config();
 
@@ -12,9 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FREE AI VERSION RUNNING 🔥");
+console.log("🔥 FINAL FREE AI VERSION RUNNING 🔥");
 
-/* 🔐 JWT (HARDCODE SAFE) */
+/* 🔐 JWT */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
 /* ROOT */
@@ -82,7 +81,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* GENERATE (FREE AI - HUGGING FACE) */
+/* GENERATE (HUGGING FACE - FREE) */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
