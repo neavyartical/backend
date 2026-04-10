@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
+import OpenAI from "openai";
 
 dotenv.config();
 
@@ -11,41 +12,49 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-/* ================== CHECK ENV ================== */
+/* ================= ENV CHECK ================= */
 if (!process.env.JWT_SECRET) {
   console.log("❌ JWT_SECRET MISSING");
 }
 if (!process.env.MONGO_URL) {
   console.log("❌ MONGO_URL MISSING");
 }
+if (!process.env.OPENAI_API_KEY) {
+  console.log("❌ OPENAI_API_KEY MISSING");
+}
 
-/* ================== MONGO ================== */
+/* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-/* ================== ROOT ================== */
+/* ================= OPENAI ================= */
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* ================== TEST TOKEN ================== */
+/* ================= TEST TOKEN ================= */
 app.get("/test-token", (req, res) => {
   const token = jwt.sign(
     { id: "admin" },
-    process.env.JWT_SECRET || "fallback_secret"
+    process.env.JWT_SECRET
   );
   res.json({ token });
 });
 
-/* ================== MODEL ================== */
+/* ================= MODEL ================= */
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
 const User = mongoose.model("User", userSchema);
 
-/* ================== REGISTER ================== */
+/* ================= REGISTER ================= */
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -72,12 +81,10 @@ app.post("/register", async (req, res) => {
   }
 });
 
-/* ================== LOGIN ================== */
+/* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    console.log("LOGIN TRY:", email);
 
     const user = await User.findOne({ email });
 
@@ -93,7 +100,7 @@ app.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id },
-      process.env.JWT_SECRET || "fallback_secret"
+      process.env.JWT_SECRET
     );
 
     res.json({ token });
@@ -104,7 +111,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* ================== GENERATE ================== */
+/* ================= GENERATE (REAL AI) ================= */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -114,7 +121,7 @@ app.post("/generate", async (req, res) => {
     }
 
     try {
-      jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
+      jwt.verify(token, process.env.JWT_SECRET);
     } catch {
       return res.json({ error: "Invalid token ❌" });
     }
@@ -125,18 +132,31 @@ app.post("/generate", async (req, res) => {
       return res.json({ error: "No prompt ❌" });
     }
 
-    // 🔥 ALWAYS WORKING AI (mock)
-    const result = `🎬 ReelMind Output:\n\n"${prompt}"\n\n🔥 Cinematic viral idea with storytelling, hooks and engagement.`
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You create viral cinematic reel scripts with hooks, scenes and storytelling."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+    });
+
+    const result = completion.choices[0].message.content;
 
     res.json({ result });
 
   } catch (err) {
-    console.log("GENERATE ERROR:", err);
-    res.json({ error: "Server error ❌" });
+    console.log("AI ERROR:", err);
+    res.json({ error: "AI error ❌" });
   }
 });
 
-/* ================== START ================== */
+/* ================= START ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
