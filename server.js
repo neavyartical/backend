@@ -1,10 +1,10 @@
-
 import express from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
+import Stripe from "stripe";
 
 dotenv.config();
 
@@ -12,7 +12,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 ReelMind AI Backend (OpenRouter + Credits) 🔥");
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+console.log("🔥 ReelMind AI FULL SYSTEM RUNNING 🔥");
 
 /* ================= JWT ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
@@ -20,6 +22,7 @@ const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 /* ================= DEBUG ================= */
 console.log("MONGO:", process.env.MONGO_URL ? "OK ✅" : "MISSING ❌");
 console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY ? "OK ✅" : "MISSING ❌");
+console.log("STRIPE:", process.env.STRIPE_SECRET_KEY ? "OK ✅" : "MISSING ❌");
 
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
@@ -35,7 +38,8 @@ mongoose.connect(process.env.MONGO_URL)
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
-  credits: { type: Number, default: 10 } // 🔥 NEW
+  credits: { type: Number, default: 10 },
+  lastReset: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model("User", userSchema);
@@ -56,7 +60,6 @@ app.post("/register", async (req, res) => {
     res.json({ message: "Registered ✅" });
 
   } catch (err) {
-    console.log(err);
     res.json({ error: "Register error ❌" });
   }
 });
@@ -76,11 +79,10 @@ app.post("/login", async (req, res) => {
 
     res.json({
       token,
-      credits: user.credits // 🔥 SEND CREDITS
+      credits: user.credits
     });
 
-  } catch (err) {
-    console.log(err);
+  } catch {
     res.json({ error: "Login error ❌" });
   }
 });
@@ -89,7 +91,6 @@ app.post("/login", async (req, res) => {
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
-
     if (!token) return res.json({ error: "No token ❌" });
 
     let decoded;
@@ -102,6 +103,16 @@ app.post("/generate", async (req, res) => {
     const user = await User.findById(decoded.id);
     if (!user) return res.json({ error: "User not found ❌" });
 
+    // 🔁 DAILY RESET
+    const now = new Date();
+    const diff = (now - new Date(user.lastReset)) / (1000 * 60 * 60);
+
+    if (diff >= 24) {
+      user.credits = 10;
+      user.lastReset = now;
+      await user.save();
+    }
+
     // 🚨 CREDIT CHECK
     if (user.credits <= 0) {
       return res.json({ error: "No credits left ❌" });
@@ -110,9 +121,7 @@ app.post("/generate", async (req, res) => {
     const { prompt } = req.body;
     if (!prompt) return res.json({ error: "No prompt ❌" });
 
-    console.log("🧠 Prompt:", prompt);
-
-    // 🔥 OPENROUTER CALL
+    // 🔥 OPENROUTER AI
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -139,11 +148,10 @@ app.post("/generate", async (req, res) => {
     const data = await response.json();
 
     if (!data.choices) {
-      console.log(data);
       return res.json({ error: "AI failed ❌" });
     }
 
-    // ✅ DEDUCT CREDIT
+    // ➖ DEDUCT CREDIT
     user.credits -= 1;
     await user.save();
 
@@ -155,6 +163,53 @@ app.post("/generate", async (req, res) => {
   } catch (err) {
     console.log(err);
     res.json({ error: "Generation failed ❌" });
+  }
+});
+
+/* ================= STRIPE PAYMENT ================= */
+app.post("/create-checkout-session", async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: "100 AI Credits"
+            },
+            unit_amount: 500
+          },
+          quantity: 1
+        }
+      ],
+      success_url: "https://your-frontend.com/success",
+      cancel_url: "https://your-frontend.com/cancel"
+    });
+
+    res.json({ url: session.url });
+
+  } catch {
+    res.json({ error: "Payment error ❌" });
+  }
+});
+
+/* ================= ADD CREDITS ================= */
+app.post("/add-credits", async (req, res) => {
+  try {
+    const token = req.headers.authorization;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await User.findById(decoded.id);
+
+    user.credits += 100;
+    await user.save();
+
+    res.json({ credits: user.credits });
+
+  } catch {
+    res.json({ error: "Failed ❌" });
   }
 });
 
