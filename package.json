@@ -1,12 +1,16 @@
 {
   "name": "ReelMind AI",
   "short_name": "ReelMind",
+  "description": "Create viral videos, AI images, and content instantly with ReelMind AI.",
+  
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
+
   "background_color": "#000000",
   "theme_color": "#00ffcc",
-  "orientation": "portrait",
-  "description": "Create viral videos, images and AI content instantly.",
+
   "icons": [
     {
       "src": "https://i.imgur.com/6VBx3io.png",
