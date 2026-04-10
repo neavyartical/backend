@@ -1,75 +1,81 @@
-const API = "https://YOUR-RENDER-URL.onrender.com"; // 🔁 replace this
+require("dotenv").config();
 
-// ================= REGISTER =================
-async function register() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
-  const res = await fetch(API + "/register", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ email, password })
-  });
+const app = express();
 
-  const data = await res.json();
-  alert(data.message || data.error);
-}
+app.use(cors());
+app.use(express.json());
 
-// ================= LOGIN =================
-async function login() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
+// ✅ CONNECT MONGO
+mongoose.connect(process.env.MONGO_URL)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.log("Mongo error:", err));
 
-  const res = await fetch(API + "/login", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ email, password })
-  });
+// ✅ USER MODEL
+const UserSchema = new mongoose.Schema({
+  email: String,
+  password: String
+});
 
-  const data = await res.json();
+const User = mongoose.model("User", UserSchema);
 
-  if (data.token) {
-    localStorage.setItem("token", data.token); // ✅ SAVE TOKEN
-    alert("Login successful 🚀");
-  } else {
-    alert(data.message || "Login failed");
+// ✅ REGISTER
+app.post("/register", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const hashed = await bcrypt.hash(password, 10);
+
+    const user = new User({ email, password: hashed });
+    await user.save();
+
+    res.json({ message: "User registered" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-}
+});
 
-// ================= GENERATE =================
-async function generate() {
-  const prompt = document.getElementById("prompt").value;
-  const token = localStorage.getItem("token");
+// ✅ LOGIN
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!token) {
-    alert("Please login first ❌");
-    return;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ error: "User not found" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(400).json({ error: "Wrong password" });
+
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  const res = await fetch(API + "/generate", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": token // ✅ SEND TOKEN
-    },
-    body: JSON.stringify({ prompt })
-  });
+// ✅ PROTECTED ROUTE (TEST)
+app.get("/me", (req, res) => {
+  res.json({ message: "Protected route works" });
+});
 
-  const data = await res.json();
+// ✅ ROOT TEST
+app.get("/", (req, res) => {
+  res.send("API is running 🚀");
+});
 
-  if (data.result) {
-    document.getElementById("output").innerText = data.result;
-  } else {
-    document.getElementById("output").innerText = data.message || "Error";
-  }
-}
+// ✅ START SERVER
+const PORT = process.env.PORT || 5000;
 
-// ================= LOGOUT =================
-function logout() {
-  localStorage.removeItem("token");
-  alert("Logged out 👋");
-}
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
