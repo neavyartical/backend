@@ -11,7 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FINAL HF VERSION RUNNING 🔥");
+console.log("🔥 OPENROUTER VERSION RUNNING 🔥");
 
 /* ================= JWT ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
@@ -19,11 +19,11 @@ const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 /* ================= DEBUG ================= */
 console.log("JWT:", "HARDCODED ✅");
 console.log("MONGO:", process.env.MONGO_URL ? "OK ✅" : "MISSING ❌");
-console.log("HF:", process.env.HF_API_KEY ? "OK ✅" : "MISSING ❌");
+console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY ? "OK ✅" : "MISSING ❌");
 
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀 (HF AI)");
+  res.send("ReelMind Backend Running 🚀 (OpenRouter AI)");
 });
 
 /* ================= TEST TOKEN ================= */
@@ -86,7 +86,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* ================= GENERATE (HF FIXED) ================= */
+/* ================= GENERATE (OPENROUTER) ================= */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -104,37 +104,43 @@ app.post("/generate", async (req, res) => {
 
     console.log("🧠 Prompt:", prompt);
 
-    const response = await fetch(
-      "https://router.huggingface.co/hf-inference/models/bigscience/bloom",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.HF_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          inputs: `Create a viral cinematic reel script with hook, scenes and storytelling:\n${prompt}`
-        })
-      }
-    );
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://reelmind.app",
+        "X-Title": "ReelMind AI"
+      },
+      body: JSON.stringify({
+        model: "meta-llama/llama-3-8b-instruct",
+        messages: [
+          {
+            role: "system",
+            content: "Create viral cinematic reel scripts with hook, scenes and storytelling."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
+      })
+    });
 
     const data = await response.json();
 
-    let result = "";
-
-    if (Array.isArray(data)) {
-      result = data[0]?.generated_text || "No result";
-    } else if (data.error) {
-      result = data.error;
-    } else {
-      result = JSON.stringify(data);
+    if (data.choices) {
+      console.log("✅ OpenRouter used");
+      return res.json({ result: data.choices[0].message.content });
     }
 
-    res.json({ result });
+    console.log("⚠️ OpenRouter issue:", data);
+
+    res.json({ error: "AI failed ❌" });
 
   } catch (err) {
-    console.log("HF ERROR:", err);
-    res.json({ error: "Free AI error ❌" });
+    console.log("ERROR:", err);
+    res.json({ error: "Generation failed ❌" });
   }
 });
 
