@@ -1,27 +1,21 @@
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
-import path from "path";
-import { fileURLToPath } from "url";
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// ✅ ENV KEY
+// ✅ MUST MATCH RENDER ENV VARIABLE NAME
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("OPENROUTER:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
+// 🔍 Debug log
+console.log("OPENROUTER_API_KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// Fix path (optional frontend hosting)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, "public")));
-
-// ✅ TEST ROUTE (VERY IMPORTANT)
+// ✅ TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend Running");
+  res.send("🚀 ReelMind AI Backend Working");
 });
 
 // ✅ GENERATE ROUTE
@@ -29,12 +23,10 @@ app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // 🧠 fallback if no prompt
     if (!prompt) {
-      return res.json({ result: "Please enter a prompt" });
+      return res.json({ result: "Enter a prompt first" });
     }
 
-    // 🚨 if key missing
     if (!OPENROUTER_API_KEY) {
       return res.json({ result: "API key missing ❌" });
     }
@@ -47,26 +39,24 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model: "mistralai/mistral-7b-instruct",
-        messages: [
-          { role: "user", content: prompt }
-        ]
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
 
-    console.log("API RESPONSE:", JSON.stringify(data, null, 2));
+    console.log("API RESPONSE:", data);
 
-    // ✅ SAFE RESPONSE
     const output =
       data?.choices?.[0]?.message?.content ||
-      "No AI response returned";
+      data?.error?.message ||
+      "No response";
 
     res.json({ result: output });
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    res.json({ result: "Server crashed ❌" });
+    res.json({ result: "Server error ❌" });
   }
 });
 
