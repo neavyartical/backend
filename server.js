@@ -11,35 +11,40 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FINAL FREE AI VERSION RUNNING 🔥");
+console.log("🔥 FINAL CLEAN VERSION RUNNING 🔥");
 
-/* 🔐 JWT */
+/* ================= JWT (HARDCODE) ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
-/* ROOT */
+/* ================= DEBUG ================= */
+console.log("JWT:", "HARDCODED ✅");
+console.log("MONGO:", process.env.MONGO_URL ? "OK ✅" : "MISSING ❌");
+console.log("HF:", process.env.HF_API_KEY ? "OK ✅" : "MISSING ❌");
+
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀 (FREE AI)");
 });
 
-/* TEST TOKEN */
+/* ================= TEST TOKEN ================= */
 app.get("/test-token", (req, res) => {
   const token = jwt.sign({ id: "admin" }, JWT_SECRET);
   res.json({ token });
 });
 
-/* MONGO */
+/* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected ✅"))
   .catch(err => console.log("Mongo error ❌:", err));
 
-/* USER MODEL */
+/* ================= MODEL ================= */
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
 const User = mongoose.model("User", userSchema);
 
-/* REGISTER */
+/* ================= REGISTER ================= */
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -60,7 +65,7 @@ app.post("/register", async (req, res) => {
   }
 });
 
-/* LOGIN */
+/* ================= LOGIN ================= */
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -81,7 +86,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* GENERATE (HUGGING FACE - FREE) */
+/* ================= GENERATE (FREE AI) ================= */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -133,7 +138,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* START */
+/* ================= START ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
