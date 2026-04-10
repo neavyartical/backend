@@ -7,18 +7,17 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 USE ENV VARIABLE (DO NOT HARDCODE)
+// 🔐 ENV KEY (from Render)
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Debug log
 console.log("KEY STATUS:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// ✅ HEALTH CHECK (optional)
+// ✅ TEST ROUTE (optional)
 app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend is running");
+  res.send("ReelMind AI Backend Running 🚀");
 });
 
-// 🚀 GENERATE ROUTE
+// 🎯 GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -36,18 +35,13 @@ app.post("/generate", async (req, res) => {
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://reelmind-ai.vercel.app", // optional
+        "HTTP-Referer": "https://reelmind-ai.vercel.app",
         "X-Title": "ReelMind AI"
       },
       body: JSON.stringify({
-        // ✅ WORKING MODEL
-        model: "meta-llama/llama-3-8b-instruct",
-
+        // ✅ STABLE WORKING MODEL
+        model: "openai/gpt-3.5-turbo",
         messages: [
-          {
-            role: "system",
-            content: "You are a viral content creator AI. Generate engaging, high-quality viral scripts."
-          },
           {
             role: "user",
             content: prompt
@@ -57,28 +51,25 @@ app.post("/generate", async (req, res) => {
     });
 
     const data = await response.json();
-
     console.log("API RESPONSE:", data);
 
-    // ❌ HANDLE API ERRORS
     if (data.error) {
       return res.json({
         result: "API Error ❌: " + data.error.message
       });
     }
 
-    // ✅ SUCCESS RESPONSE
     res.json({
       result: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
-    console.error("SERVER ERROR:", err);
+    console.error(err);
     res.json({ result: "Server error ❌" });
   }
 });
 
-// 🔥 START SERVER
+// 🚀 START SERVER
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
