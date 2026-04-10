@@ -9,20 +9,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ROOT
 app.get("/", (req, res) => {
   res.send("NEW VERSION 🚀");
 });
 
+// FORCE TEST ROUTE
 app.get("/test-token", (req, res) => {
-  const token = jwt.sign(
-    { id: "admin123" },
-    process.env.JWT_SECRET,
-    { expiresIn: "7d" }
-  );
+  console.log("ROUTE HIT ✅");
 
-  res.json({ token });
+  return res.json({
+    message: "route works",
+    token: "test123"
+  });
 });
 
+// START
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
