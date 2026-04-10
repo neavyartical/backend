@@ -19,8 +19,22 @@ mongoose.connect(process.env.MONGO_URL)
 const User = mongoose.model("User", {
   email: String,
   password: String,
-  credits: { type: Number, default: 5 }
 });
+
+// 🔐 AUTH MIDDLEWARE
+const auth = (req, res, next) => {
+  const token = req.headers.authorization;
+
+  if (!token) return res.json({ result: "Login first" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch {
+    res.json({ result: "Invalid token" });
+  }
+};
 
 // ✅ REGISTER
 app.post("/register", async (req, res) => {
@@ -44,7 +58,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return res.json({ error: "No user" });
+  if (!user) return res.json({ error: "User not found" });
 
   const ok = await bcrypt.compare(password, user.password);
   if (!ok) return res.json({ error: "Wrong password" });
@@ -53,12 +67,21 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// ✅ GENERATE (TEST VERSION)
-app.post("/generate", async (req, res) => {
-  res.json({ result: "AI is working 🚀" });
+// 🤖 GENERATE (PROTECTED)
+app.post("/generate", auth, async (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt) {
+    return res.json({ result: "Enter prompt" });
+  }
+
+  // TEMP RESPONSE (we add real AI next)
+  res.json({
+    result: "🔥 AI Response: " + prompt
+  });
 });
 
-// ✅ START SERVER
+// 🚀 START SERVER
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running");
 });
