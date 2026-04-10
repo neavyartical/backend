@@ -1,30 +1,21 @@
 import express from "express";
 import cors from "cors";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ROOT
+// ✅ ROOT
 app.get("/", (req, res) => {
-  res.send("NEW VERSION 🚀");
+  res.send("FINAL VERSION 🚀");
 });
 
-// FORCE TEST ROUTE
+// ✅ TEST ROUTE (NO JWT, NO ERROR POSSIBLE)
 app.get("/test-token", (req, res) => {
-  console.log("ROUTE HIT ✅");
-
-  return res.json({
-    message: "route works",
-    token: "test123"
-  });
+  res.send("TEST TOKEN WORKING ✅");
 });
 
-// START
+// ✅ START
 app.listen(process.env.PORT || 3000, () => {
   console.log("Server running 🚀");
 });
