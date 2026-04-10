@@ -11,9 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-console.log("🔥 FINAL CLEAN VERSION RUNNING 🔥");
+console.log("🔥 FINAL HF VERSION RUNNING 🔥");
 
-/* ================= JWT (HARDCODE) ================= */
+/* ================= JWT ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
 
 /* ================= DEBUG ================= */
@@ -23,7 +23,7 @@ console.log("HF:", process.env.HF_API_KEY ? "OK ✅" : "MISSING ❌");
 
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀 (FREE AI)");
+  res.send("ReelMind Backend Running 🚀 (HF AI)");
 });
 
 /* ================= TEST TOKEN ================= */
@@ -86,7 +86,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-/* ================= GENERATE (FREE AI) ================= */
+/* ================= GENERATE (HF FIXED) ================= */
 app.post("/generate", async (req, res) => {
   try {
     const token = req.headers.authorization;
@@ -105,7 +105,7 @@ app.post("/generate", async (req, res) => {
     console.log("🧠 Prompt:", prompt);
 
     const response = await fetch(
-      "https://api-inference.huggingface.co/models/bigscience/bloom",
+      "https://router.huggingface.co/hf-inference/models/bigscience/bloom",
       {
         method: "POST",
         headers: {
