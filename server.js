@@ -9,22 +9,35 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 USE ENV VARIABLE (SAFER)
+// ✅ ENV KEY
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-
-// Fix path
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Serve frontend (optional)
-app.use(express.static(path.join(__dirname, "public")));
 
 console.log("OPENROUTER:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// ✅ API ROUTE
+// Fix path (optional frontend hosting)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
+
+// ✅ TEST ROUTE (VERY IMPORTANT)
+app.get("/", (req, res) => {
+  res.send("🚀 ReelMind AI Backend Running");
+});
+
+// ✅ GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    // 🧠 fallback if no prompt
+    if (!prompt) {
+      return res.json({ result: "Please enter a prompt" });
+    }
+
+    // 🚨 if key missing
+    if (!OPENROUTER_API_KEY) {
+      return res.json({ result: "API key missing ❌" });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -34,24 +47,30 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model: "mistralai/mistral-7b-instruct",
-        messages: [{ role: "user", content: prompt }]
+        messages: [
+          { role: "user", content: prompt }
+        ]
       })
     });
 
     const data = await response.json();
 
-    // ✅ ONLY ONE RESULT (FIXED)
-    res.json({
-      result: data.choices?.[0]?.message?.content || "No response"
-    });
+    console.log("API RESPONSE:", JSON.stringify(data, null, 2));
+
+    // ✅ SAFE RESPONSE
+    const output =
+      data?.choices?.[0]?.message?.content ||
+      "No AI response returned";
+
+    res.json({ result: output });
 
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+    res.json({ result: "Server crashed ❌" });
   }
 });
 
-// START SERVER
+// ✅ START SERVER
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
