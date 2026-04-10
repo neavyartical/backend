@@ -20,29 +20,31 @@ app.use(express.json());
 // Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// 🔐 API KEY
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+// 🔐 KEY (Render ENV)
+let OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🔍 Debug
-console.log("KEY VALUE:", process.env.OPENROUTER_API_KEY);
-console.log("OPENROUTER KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
+// 🔥 TEMP FALLBACK (REMOVE LATER IF YOU WANT)
+if (!OPENROUTER_API_KEY) {
+  console.log("⚠️ ENV key missing, using fallback...");
+  OPENROUTER_API_KEY = "sk-or-v1-PASTE-YOUR-KEY-HERE";
+}
+
+// Debug
+console.log("KEY VALUE:", OPENROUTER_API_KEY);
+console.log("STATUS:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
 // Test route
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend Running");
 });
 
-// Generate route
+// ✅ GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     if (!prompt) {
-      return res.json({ result: "Enter a prompt first ❌" });
-    }
-
-    if (!OPENROUTER_API_KEY) {
-      return res.json({ result: "API key missing ❌" });
+      return res.json({ result: "Enter a prompt ❌" });
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -52,21 +54,24 @@ app.post("/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "mistralai/mistral-7b-instruct",
+        model: "openai/gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
 
-    console.log("API RESPONSE:", data);
+    console.log("🔥 API RESPONSE:", data);
 
     res.json({
-      result: data?.choices?.[0]?.message?.content || "No response"
+      result:
+        data?.choices?.[0]?.message?.content ||
+        data?.error?.message ||
+        "No response"
     });
 
   } catch (err) {
-    console.error("FULL ERROR:", err);
+    console.error("❌ FULL ERROR:", err);
 
     res.json({
       result: "Server error ❌",
