@@ -9,12 +9,17 @@ import Stripe from "stripe";
 dotenv.config();
 
 const app = express();
+
+/* ================= STRIPE ================= */
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+/* ================= IMPORTANT MIDDLEWARE ================= */
+// ⚠️ ORDER MATTERS FOR STRIPE WEBHOOK
+app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(cors());
 app.use(express.json());
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-console.log("🔥 ReelMind AI FULL SYSTEM RUNNING 🔥");
+console.log("🔥 FULL SaaS Backend Running 🔥");
 
 /* ================= JWT ================= */
 const JWT_SECRET = "neavyartical_allahmystrenght_ultra_secure_1995";
@@ -59,7 +64,7 @@ app.post("/register", async (req, res) => {
 
     res.json({ message: "Registered ✅" });
 
-  } catch (err) {
+  } catch {
     res.json({ error: "Register error ❌" });
   }
 });
@@ -111,9 +116,10 @@ app.post("/generate", async (req, res) => {
       user.credits = 10;
       user.lastReset = now;
       await user.save();
+      console.log("🔄 Credits reset");
     }
 
-    // 🚨 CREDIT CHECK
+    // 🚨 CHECK CREDITS
     if (user.credits <= 0) {
       return res.json({ error: "No credits left ❌" });
     }
@@ -148,6 +154,7 @@ app.post("/generate", async (req, res) => {
     const data = await response.json();
 
     if (!data.choices) {
+      console.log(data);
       return res.json({ error: "AI failed ❌" });
     }
 
@@ -166,12 +173,18 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* ================= STRIPE PAYMENT ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/create-checkout-session", async (req, res) => {
   try {
+    const token = req.headers.authorization;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
+      metadata: {
+        userId: decoded.id
+      },
       line_items: [
         {
           price_data: {
@@ -190,27 +203,46 @@ app.post("/create-checkout-session", async (req, res) => {
 
     res.json({ url: session.url });
 
-  } catch {
+  } catch (err) {
+    console.log(err);
     res.json({ error: "Payment error ❌" });
   }
 });
 
-/* ================= ADD CREDITS ================= */
-app.post("/add-credits", async (req, res) => {
+/* ================= STRIPE WEBHOOK ================= */
+app.post("/stripe-webhook", async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
   try {
-    const token = req.headers.authorization;
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    const user = await User.findById(decoded.id);
-
-    user.credits += 100;
-    await user.save();
-
-    res.json({ credits: user.credits });
-
-  } catch {
-    res.json({ error: "Failed ❌" });
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.log("Webhook error:", err.message);
+    return res.status(400).send("Webhook Error");
   }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const userId = session.metadata.userId;
+
+    try {
+      const user = await User.findById(userId);
+      if (user) {
+        user.credits += 100;
+        await user.save();
+        console.log("💰 Credits added via Stripe");
+      }
+    } catch (err) {
+      console.log("DB error:", err);
+    }
+  }
+
+  res.json({ received: true });
 });
 
 /* ================= START ================= */
