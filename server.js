@@ -1,104 +1,50 @@
 import express from "express";
-import cors from "cors";
+import mongoose from "mongoose";
 import dotenv from "dotenv";
-import connectDB from "./db.js";
+import path from "path";
 
 dotenv.config();
-connectDB();
 
 const app = express();
-app.use(cors());
+
+// ✅ MIDDLEWARE
 app.use(express.json());
 
-app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀");
-});
-
-/* GENERATE */
-app.post("/generate", async (req, res) => {
-  const { prompt, type } = req.body;
-
+// ✅ CONNECT TO MONGODB
+const connectDB = async () => {
   try {
-    let story = "";
-    let image = "";
-    let video = "";
-
-    /* ---------- STORY ---------- */
-    if (type === "story" || type === "all") {
-      story = `🔥 Cinematic story for: ${prompt}`;
-
-      if (process.env.OPENROUTER_API_KEY) {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "openai/gpt-4o-mini",
-            messages: [
-              { role: "user", content: `Write a cinematic viral story: ${prompt}` }
-            ],
-          }),
-        });
-
-        const data = await response.json();
-        story = data.choices?.[0]?.message?.content || story;
-      }
+    if (!process.env.MONGO_URI) {
+      console.error("❌ MONGO_URI is missing in environment variables");
+      process.exit(1);
     }
 
-    /* ---------- IMAGE ---------- */
-    if (type === "image" || type === "all") {
-      image = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/600/400`;
-    }
+    await mongoose.connect(process.env.MONGO_URI);
 
-    /* ---------- VIDEO ---------- */
-    if (type === "video" || type === "all") {
-      video = ""; // future runway
-    }
-
-    res.json({ story, image, video });
-
+    console.log("✅ MongoDB Connected");
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      story: "❌ Failed",
-      image: "",
-      video: "",
-    });
+    console.error("❌ MongoDB Error:", error.message);
+    process.exit(1);
   }
+};
+
+connectDB();
+
+// ✅ SERVE FRONTEND (VERY IMPORTANT FOR ADSENSE)
+app.use(express.static(path.join(process.cwd(), "public")));
+
+// ✅ TEST ROUTE
+app.get("/api", (req, res) => {
+  res.json({ message: "API working perfectly 🚀" });
 });
 
-/* ASK AI */
-app.post("/ask", async (req, res) => {
-  const { question } = req.body;
-
-  try {
-    let answer = `🌍 ${question}`;
-
-    if (process.env.OPENROUTER_API_KEY) {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
-          messages: [{ role: "user", content: question }],
-        }),
-      });
-
-      const data = await response.json();
-      answer = data.choices?.[0]?.message?.content || answer;
-    }
-
-    res.json({ answer });
-
-  } catch {
-    res.status(500).json({ answer: "❌ AI error" });
-  }
+// ✅ DEFAULT ROUTE (LOAD INDEX.HTML)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(process.cwd(), "public", "index.html"));
 });
 
+// ✅ PORT
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on ${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
