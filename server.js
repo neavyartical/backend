@@ -15,10 +15,10 @@ app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* GENERATE */
+/* GENERATE (CREDIT SAVING) */
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, mode = "all", language = "english" } = req.body;
+    const { prompt, mode = "story", language = "english" } = req.body;
 
     let story = "";
     let image = "";
@@ -29,8 +29,9 @@ app.post("/generate", async (req, res) => {
       style = "Write simple easy English story:";
     }
 
-    /* STORY */
-    if (mode === "story" || mode === "all") {
+    /* ONLY RUN WHAT IS REQUESTED */
+
+    if (mode === "story") {
       story = `🔥 ${prompt}`;
 
       if (process.env.OPENROUTER_API_KEY) {
@@ -53,24 +54,24 @@ app.post("/generate", async (req, res) => {
       }
     }
 
-    /* IMAGE */
-    if (mode === "image" || mode === "all") {
+    else if (mode === "image") {
       image = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/600/400`;
     }
 
-    /* VIDEO */
-    if (mode === "video" || mode === "all") {
-      video = "";
+    else if (mode === "video") {
+      video = ""; // runway later
+    }
+
+    else if (mode === "all") {
+      story = `🔥 ${prompt}`;
+      image = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/600/400`;
     }
 
     res.json({ story, image, video });
 
   } catch (error) {
-    res.status(500).json({
-      story: "❌ Generation failed",
-      image: "",
-      video: ""
-    });
+    console.error(error);
+    res.status(500).json({ story: "", image: "", video: "" });
   }
 });
 
