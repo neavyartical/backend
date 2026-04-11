@@ -1,10 +1,18 @@
+
 import express from "express";
 
 const app = express();
 
-/* ROOT CHECK */
+/* ROOT ROUTE */
 app.get("/", (req, res) => {
-  res.send("WORKING ✅ BACKEND LIVE");
+  res.send("🔥 BACKEND FIXED AND WORKING");
 });
 
-app.listen(process.env.PORT || 10000);
+/* TEST ROUTE */
+app.get("/test", (req, res) => {
+  res.json({ status: "OK ✅" });
+});
+
+app.listen(process.env.PORT || 10000, () => {
+  console.log("Server running...");
+});
