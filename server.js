@@ -1,18 +1,19 @@
 import express from "express";
 import cors from "cors";
+import fetch from "node-fetch";
 
 const app = express();
 
-/* ================= MIDDLEWARE ================= */
+/* ===== MIDDLEWARE ===== */
 app.use(cors());
 app.use(express.json());
 
-/* ================= ROOT ================= */
+/* ===== ROOT ===== */
 app.get("/", (req, res) => {
   res.send("🔥 ReelMind Backend Live");
 });
 
-/* ================= AI STORY (OPENROUTER) ================= */
+/* ===== AI STORY ===== */
 app.post("/story", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -32,11 +33,11 @@ app.post("/story", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are a cinematic AI that creates viral, emotional, high-quality stories."
+            content: "You create ultra cinematic, viral, emotional stories."
           },
           {
             role: "user",
-            content: `Create a short viral cinematic story about: ${prompt}`
+            content: `Create a cinematic viral story about: ${prompt}`
           }
         ]
       })
@@ -44,20 +45,21 @@ app.post("/story", async (req, res) => {
 
     const data = await response.json();
 
-    const story = data.choices?.[0]?.message?.content;
+    if (!data.choices) {
+      return res.json({ story: "⚠️ AI not responding yet" });
+    }
 
     res.json({
-      success: true,
-      story: story || "No story generated"
+      story: data.choices[0].message.content
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "AI generation failed" });
+    res.json({ story: "❌ AI error" });
   }
 });
 
-/* ================= START SERVER ================= */
+/* ===== START SERVER ===== */
 app.listen(process.env.PORT || 10000, () => {
   console.log("🚀 Server running...");
 });
