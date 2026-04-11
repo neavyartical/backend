@@ -3,49 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <title>ReelMind AI</title>
-
-  <!-- ✅ ADSENSE -->
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-726799"
-     crossorigin="anonymous"></script>
-
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-  <div class="app">
+<div class="container">
 
+  <!-- HEADER -->
+  <header>
     <h1>ReelMind <span>AI</span></h1>
-    <p>Powered by Artical Neavy</p>
+    <p>AI-powered viral content generator</p>
+  </header>
 
-    <textarea id="prompt" placeholder="Enter your idea..."></textarea>
-
-    <button onclick="generate('all')">✨ Generate</button>
-
-    <div class="grid">
-      <button onclick="generate('story')">📖 Story</button>
-      <button onclick="generate('image')">🖼 Image</button>
-      <button onclick="generate('video')">🎬 Video</button>
-      <button onclick="askAI()">🌍 Ask AI</button>
-    </div>
-
-    <div id="result"></div>
-
-    <!-- ✅ AD -->
-    <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-client="ca-pub-726799"
-         data-ad-slot="1234567890"
-         data-ad-format="auto"
-         data-full-width-responsive="true"></ins>
-
-    <button onclick="downloadResult()">⬇ Download</button>
-
+  <!-- INPUT -->
+  <div class="input-box">
+    <textarea id="prompt" placeholder="Describe your idea..."></textarea>
+    <button onclick="generate()">✨ Generate</button>
   </div>
 
-  <script>
-    (adsbygoogle = window.adsbygoogle || []).push({});
-  </script>
+  <!-- TOOLS -->
+  <div class="tools">
+    <button onclick="generateType('story')">📖 Story</button>
+    <button onclick="generateType('image')">🖼 Image</button>
+    <button onclick="generateType('video')">🎬 Video</button>
+    <button onclick="askAI()">🌍 Ask AI</button>
+  </div>
 
-  <script src="script.js"></script>
+  <!-- RESULT -->
+  <div id="result" class="result-box">
+    <p>Your result will appear here...</p>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
