@@ -10,7 +10,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-/* TEMP USER STORAGE */
+/* 👑 CHANGE THIS TO YOUR EMAIL */
+const OWNER_EMAIL = "artical@example.com";
+
+/* TEMP DATABASE */
 let users = {};
 
 /* ROOT */
@@ -23,10 +26,12 @@ app.post("/register", (req, res) => {
   const { email } = req.body;
 
   if (!users[email]) {
-    users[email] = { credits: 10 };
+    users[email] = {
+      credits: email === OWNER_EMAIL ? "unlimited" : 10
+    };
   }
 
-  res.json({ credits: users[email].credits });
+  res.json(users[email]);
 });
 
 /* USE CREDIT */
@@ -34,6 +39,10 @@ app.post("/use-credit", (req, res) => {
   const { email } = req.body;
 
   if (!users[email]) return res.json({ error: "User not found" });
+
+  if (email === OWNER_EMAIL) {
+    return res.json({ credits: "unlimited" });
+  }
 
   if (users[email].credits <= 0) {
     return res.json({ error: "No credits left" });
@@ -44,19 +53,14 @@ app.post("/use-credit", (req, res) => {
   res.json({ credits: users[email].credits });
 });
 
-/* GENERATE (SMART + CREDIT SAVING) */
+/* GENERATE (STRICT MODE) */
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, mode = "story", language = "english" } = req.body;
+    const { prompt, mode = "story" } = req.body;
 
     let story = "";
     let image = "";
     let video = "";
-
-    let style = "Write a cinematic viral story:";
-    if (language === "krio") {
-      style = "Write simple easy English story:";
-    }
 
     if (mode === "story") {
       story = `🔥 ${prompt}`;
@@ -70,7 +74,9 @@ app.post("/generate", async (req, res) => {
           },
           body: JSON.stringify({
             model: "openai/gpt-4o-mini",
-            messages: [{ role: "user", content: `${style} ${prompt}` }]
+            messages: [
+              { role: "user", content: `Write a cinematic story: ${prompt}` }
+            ]
           })
         });
 
@@ -94,8 +100,8 @@ app.post("/generate", async (req, res) => {
 
     res.json({ story, image, video });
 
-  } catch (error) {
-    res.status(500).json({ story: "", image: "", video: "" });
+  } catch {
+    res.json({ story: "", image: "", video: "" });
   }
 });
 
