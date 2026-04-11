@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
 import dotenv from "dotenv";
 import connectDB from "./db.js";
 
@@ -116,7 +115,7 @@ app.post("/generate-image", async (req, res) => {
 });
 
 /* ============================= */
-/* 🎬 VIDEO ONLY (RUNWAY READY) */
+/* 🎬 VIDEO ONLY */
 /* ============================= */
 app.post("/generate-video", async (req, res) => {
   const { prompt } = req.body;
@@ -125,7 +124,7 @@ app.post("/generate-video", async (req, res) => {
     let video = "";
 
     if (process.env.RUNWAY_API_KEY) {
-      // Future real Runway integration
+      // Future Runway integration here
       video = "";
     }
 
@@ -173,9 +172,7 @@ app.post("/ask", async (req, res) => {
   }
 });
 
-/* ============================= */
 /* START SERVER */
-/* ============================= */
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
