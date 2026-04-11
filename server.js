@@ -11,33 +11,32 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// API Keys - Must be set in Render Environment Variables
+// API Keys - Set in Render Settings
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const RUNWAY_KEY = process.env.RUNWAY_API_KEY;
 
-// --- UNIFIED GENERATION ENGINE ---
+// --- MASTER GENERATION GATE ---
 app.post('/generate', async (req, res) => {
     const { action, input } = req.body;
 
-    if (!input) return res.status(400).json({ error: "No input provided." });
+    if (!input) return res.status(400).json({ error: "Input required" });
 
     try {
-        // ACTION: CHAT / SCRIPT
+        // ACTION: CHAT / STORY / PROBLEM SOLVING
         if (action === 'chat') {
             const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-                model: "google/gemini-2.0-flash-001", 
-                messages: [{ role: "user", content: `Write a cinematic script for: ${input}` }]
+                model: "google/gemini-2.0-flash-001",
+                messages: [{ role: "user", content: `You are ReelMind AI Unlimited. Response task: ${input}` }]
             }, {
                 headers: { "Authorization": `Bearer ${OPENROUTER_KEY}` }
             });
             return res.json({ type: 'text', data: response.data.choices[0].message.content });
         }
 
-        // ACTION: 4K IMAGE (Flux Engine)
+        // ACTION: 4K IMAGE GENERATION (Flux/Pollinations)
         if (action === 'image') {
-            const seed = Math.floor(Math.random() * 999999);
-            // Unified URL for ultra-high-definition cinematic lighting
-            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(input + " cinematic 8k lighting unreal engine") }?width=1920&height=1080&model=flux&seed=${seed}`;
+            const seed = Math.floor(Math.random() * 1000000);
+            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(input + " cinematic lighting 8k resolution unreal engine") }?width=1920&height=1080&model=flux&seed=${seed}`;
             return res.json({ type: 'image', data: imageUrl });
         }
 
@@ -53,23 +52,12 @@ app.post('/generate', async (req, res) => {
         }
 
     } catch (err) {
-        console.error("ENGINE ERROR:", err.response?.data || err.message);
-        res.status(500).json({ 
-            error: "AI Engine Busy", 
-            message: "Models are calibrating. Please retry in 10s." 
-        });
+        console.error("ENGINE ERROR:", err.message);
+        res.status(500).json({ error: "AI Engine Busy", message: "Retrying in 5 seconds..." });
     }
 });
 
-// --- SYSTEM STABILITY ---
-app.get('/', (req, res) => res.send('ReelMind AI Core: Online'));
-
-app.use((err, req, res, next) => {
-    console.error("CRITICAL SAFETY NET:", err.stack);
-    res.status(500).json({ error: "System freeze prevented." });
-});
+app.get('/', (req, res) => res.send('ReelMind AI Unlimited Engine v2.2.0: ACTIVE'));
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🧊 REELMIND AI CORE ONLINE | PORT ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Engine Core Online on ${PORT}`));
