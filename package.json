@@ -1,11 +1,10 @@
 {
-  "name": "reelmind-pro-engine",
-  "version": "1.17.0",
-  "description": "High-performance AI engine for ReelMind Level 17",
+  "name": "reelmind-unlimited-pro",
+  "version": "2.2.0",
+  "description": "Premium ReelMind AI Engine with Unified Logic",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
   "dependencies": {
     "axios": "^1.6.8",
@@ -16,7 +15,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "author": "Artical Neavy",
-  "license": "ISC"
+  }
 }
