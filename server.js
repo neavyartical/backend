@@ -3,85 +3,98 @@ import cors from "cors";
 import fetch from "node-fetch";
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
-
-app.post("/generate", async (req, res) => {
+// ✅ TEXT
+app.post("/generate-text", async (req, res) => {
   try {
-    const { prompt, type } = req.body;
+    const { prompt } = req.body;
 
-    if (!prompt) {
-      return res.json({ result: "Enter a prompt ❌" });
-    }
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
 
-    // 🧠 TEXT GENERATION
-    if (type === "text") {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "openchat/openchat-7b",
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
+    const data = await response.json();
 
-      const data = await response.json();
-
-      return res.json({
-        type: "text",
-        result: data.choices?.[0]?.message?.content || "No response"
-      });
-    }
-
-    // 🖼️ IMAGE GENERATION (🔥 FIXED)
-    if (type === "image") {
-
-      // prevent caching by adding random seed
-      const seed = Math.floor(Math.random() * 100000);
-
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&nologo=true`;
-
-      return res.json({
-        type: "image",
-        result: imageUrl
-      });
-    }
-
-    // 🎬 VIDEO GENERATION (SMART RESPONSE)
-    if (type === "video") {
-      return res.json({
-        type: "video",
-        result:
-`🎬 Viral Video Plan:
-
-${prompt}
-
-🎥 Structure:
-1. Hook (0-3 sec)
-2. Main Content
-3. Twist / Surprise
-4. Call To Action
-
-📱 Tools:
-- CapCut
-- TikTok Editor
-
-🔥 Tip:
-Use fast cuts + captions + trending sound`
-      });
-    }
+    res.json({
+      result: data.choices?.[0]?.message?.content || "No response"
+    });
 
   } catch (err) {
-    console.error(err);
     res.json({ result: "Server error ❌" });
+  }
+});
+
+// ✅ IMAGE
+app.post("/generate-image", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const response = await fetch("https://openrouter.ai/api/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/dall-e-3",
+        prompt,
+        size: "1024x1024"
+      })
+    });
+
+    const data = await response.json();
+
+    res.json({
+      image: data.data?.[0]?.url
+    });
+
+  } catch (err) {
+    res.json({ result: "Image error ❌" });
+  }
+});
+
+// ✅ VIDEO IDEAS
+app.post("/generate-video", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: `Create a viral TikTok/Reels video idea for: ${prompt}`
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    res.json({
+      result: data.choices?.[0]?.message?.content
+    });
+
+  } catch (err) {
+    res.json({ result: "Video error ❌" });
   }
 });
 
