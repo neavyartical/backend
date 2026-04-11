@@ -9,8 +9,6 @@ app.use(express.json());
 
 const API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("KEY:", API_KEY ? "SET ✅" : "MISSING ❌");
-
 // 🔥 SMART GENERATOR
 app.post("/generate-smart", async (req, res) => {
   const { prompt } = req.body;
@@ -19,29 +17,33 @@ app.post("/generate-smart", async (req, res) => {
     return res.json({ output: "Enter prompt ❌" });
   }
 
+  const lower = prompt.toLowerCase();
+
+  let type = "text";
+
+  if (
+    lower.includes("image") ||
+    lower.includes("photo") ||
+    lower.includes("picture") ||
+    lower.includes("draw") ||
+    lower.includes("dog") ||
+    lower.includes("cat") ||
+    lower.includes("anime")
+  ) {
+    type = "image";
+  }
+
+  if (
+    lower.includes("video") ||
+    lower.includes("reel") ||
+    lower.includes("tiktok")
+  ) {
+    type = "video";
+  }
+
   try {
-    let type = "text";
 
-    const lower = prompt.toLowerCase();
-
-    // 🧠 Detect intent
-    if (
-      lower.includes("image") ||
-      lower.includes("photo") ||
-      lower.includes("picture") ||
-      lower.includes("draw") ||
-      lower.includes("dog") ||
-      lower.includes("cat") ||
-      lower.includes("anime")
-    ) {
-      type = "image";
-    }
-
-    if (lower.includes("video") || lower.includes("reel")) {
-      type = "video";
-    }
-
-    // 🖼 IMAGE (REAL WORKING API)
+    // 🖼 IMAGE (ALWAYS WORKING)
     if (type === "image") {
       const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
@@ -51,18 +53,27 @@ app.post("/generate-smart", async (req, res) => {
       });
     }
 
-    // 🎬 VIDEO (SMART TEXT FOR NOW)
+    // 🎬 VIDEO (FORCED VIDEO FORMAT)
     if (type === "video") {
+
       const videoPrompt = `
-Create a HIGH QUALITY viral TikTok/Reel video script for:
+Create a VIRAL SHORT VIDEO (TikTok/Reel) for:
 "${prompt}"
 
-Include:
-- Hook
-- Scenes
-- Camera angles
-- Music suggestion
-- Hashtags
+STRICT FORMAT:
+
+TITLE:
+HOOK (first 3 seconds):
+SCENES:
+1.
+2.
+3.
+CAMERA STYLE:
+BACKGROUND MUSIC:
+CAPTION:
+HASHTAGS:
+
+Make it SHORT, punchy and viral.
       `;
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -81,7 +92,7 @@ Include:
 
       return res.json({
         type: "video",
-        output: data.choices?.[0]?.message?.content || "No video generated"
+        output: data.choices?.[0]?.message?.content || "Video failed ❌"
       });
     }
 
@@ -111,8 +122,7 @@ Include:
   }
 });
 
-// START
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`🚀 Running on ${PORT}`);
+  console.log("🚀 Running on port " + PORT);
 });
