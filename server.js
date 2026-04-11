@@ -15,18 +15,23 @@ app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* GENERATE WITH MODE */
+/* GENERATE */
 app.post("/generate", async (req, res) => {
   try {
-    const { prompt, mode = "all" } = req.body;
+    const { prompt, mode = "all", language = "english" } = req.body;
 
     let story = "";
     let image = "";
     let video = "";
 
+    let style = "Write a cinematic viral story:";
+    if (language === "krio") {
+      style = "Write simple easy English story:";
+    }
+
     /* STORY */
     if (mode === "story" || mode === "all") {
-      story = `🔥 Cinematic story for: ${prompt}`;
+      story = `🔥 ${prompt}`;
 
       if (process.env.OPENROUTER_API_KEY) {
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -38,7 +43,7 @@ app.post("/generate", async (req, res) => {
           body: JSON.stringify({
             model: "openai/gpt-4o-mini",
             messages: [
-              { role: "user", content: `Write a cinematic viral story: ${prompt}` }
+              { role: "user", content: `${style} ${prompt}` }
             ]
           })
         });
@@ -55,14 +60,12 @@ app.post("/generate", async (req, res) => {
 
     /* VIDEO */
     if (mode === "video" || mode === "all") {
-      video = ""; // runway later
+      video = "";
     }
 
     res.json({ story, image, video });
 
   } catch (error) {
-    console.error("Generate error:", error);
-
     res.status(500).json({
       story: "❌ Generation failed",
       image: "",
@@ -71,12 +74,17 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* ASK ANYTHING */
+/* ASK */
 app.post("/ask", async (req, res) => {
   try {
-    const { question } = req.body;
+    const { question, language = "english" } = req.body;
 
-    let answer = `🌍 ${question}`;
+    let prefix = "";
+    if (language === "krio") {
+      prefix = "Explain in simple English: ";
+    }
+
+    let answer = question;
 
     if (process.env.OPENROUTER_API_KEY) {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -87,7 +95,7 @@ app.post("/ask", async (req, res) => {
         },
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
-          messages: [{ role: "user", content: question }]
+          messages: [{ role: "user", content: prefix + question }]
         })
       });
 
