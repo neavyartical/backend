@@ -7,12 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔐 API KEY FROM RENDER ENV
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 console.log("KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
 
-// ROUTE
 app.post("/generate", async (req, res) => {
   try {
     const { prompt, type } = req.body;
@@ -37,30 +35,47 @@ app.post("/generate", async (req, res) => {
 
       const data = await response.json();
 
-      if (data.error) {
-        return res.json({ result: "API Error ❌: " + data.error.message });
-      }
-
       return res.json({
         type: "text",
         result: data.choices?.[0]?.message?.content || "No response"
       });
     }
 
-    // 🖼️ IMAGE GENERATION (FAST)
+    // 🖼️ IMAGE GENERATION (🔥 FIXED)
     if (type === "image") {
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+      // prevent caching by adding random seed
+      const seed = Math.floor(Math.random() * 100000);
+
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&nologo=true`;
+
       return res.json({
         type: "image",
         result: imageUrl
       });
     }
 
-    // 🎬 VIDEO (PREVIEW)
+    // 🎬 VIDEO GENERATION (SMART RESPONSE)
     if (type === "video") {
       return res.json({
         type: "video",
-        result: "🎬 Video idea ready:\n\n" + prompt + "\n\n(Use in CapCut / Runway ML)"
+        result:
+`🎬 Viral Video Plan:
+
+${prompt}
+
+🎥 Structure:
+1. Hook (0-3 sec)
+2. Main Content
+3. Twist / Surprise
+4. Call To Action
+
+📱 Tools:
+- CapCut
+- TikTok Editor
+
+🔥 Tip:
+Use fast cuts + captions + trending sound`
       });
     }
 
@@ -70,7 +85,6 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// START SERVER
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
