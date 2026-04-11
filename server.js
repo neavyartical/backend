@@ -7,7 +7,7 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Serve static frontend
+// ✅ Serve frontend
 const publicPath = path.join(__dirname, "public");
 app.use(express.static(publicPath));
 
@@ -47,7 +47,7 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ FORCE frontend for ALL routes (VERY IMPORTANT)
+// ✅ FORCE frontend for ALL routes
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
