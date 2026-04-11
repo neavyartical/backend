@@ -6,63 +6,70 @@ const helmet = require('helmet');
 
 const app = express();
 
-// Security & Middleware
+// --- PRODUCTION SECURITY ---
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// API Connections
-const API_CONFIG = {
-    openRouter: "https://openrouter.ai/api/v1/chat/completions",
-    runway: "https://api.runwayml.com/v1/image_to_video"
-};
+// API Keys - Must be set in Render Environment Variables
+const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
+const RUNWAY_KEY = process.env.RUNWAY_API_KEY;
 
-// --- AI LOGIC ---
+// --- UNIFIED GENERATION ENGINE ---
 app.post('/generate', async (req, res) => {
     const { action, input } = req.body;
-    if (!input) return res.status(400).json({ error: "Input required" });
+
+    if (!input) return res.status(400).json({ error: "No input provided." });
 
     try {
+        // ACTION: CHAT / SCRIPT
         if (action === 'chat') {
-            const response = await axios.post(API_CONFIG.openRouter, {
-                model: "google/gemini-2.0-flash-001",
-                messages: [{ role: "user", content: input }]
+            const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+                model: "google/gemini-2.0-flash-001", 
+                messages: [{ role: "user", content: `Write a cinematic script for: ${input}` }]
             }, {
-                headers: { "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}` }
+                headers: { "Authorization": `Bearer ${OPENROUTER_KEY}` }
             });
             return res.json({ type: 'text', data: response.data.choices[0].message.content });
         }
 
+        // ACTION: 4K IMAGE (Flux Engine)
         if (action === 'image') {
-            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(input)}?width=1920&height=1080&model=flux`;
+            const seed = Math.floor(Math.random() * 999999);
+            // Unified URL for ultra-high-definition cinematic lighting
+            const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(input + " cinematic 8k lighting unreal engine") }?width=1920&height=1080&model=flux&seed=${seed}`;
             return res.json({ type: 'image', data: imageUrl });
         }
 
+        // ACTION: VIDEO (Runway Gen-3)
         if (action === 'video') {
-            const response = await axios.post(API_CONFIG.runway, {
-                promptText: input, model: "gen3a_turbo"
+            const response = await axios.post('https://api.runwayml.com/v1/image_to_video', {
+                promptText: input,
+                model: "gen3a_turbo"
             }, {
-                headers: { "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}` }
+                headers: { "Authorization": `Bearer ${RUNWAY_KEY}` }
             });
             return res.json({ type: 'video', data: response.data.url });
         }
+
     } catch (err) {
-        console.error("Engine Error:", err.message);
-        res.status(500).json({ error: "AI Engine busy. Please retry." });
+        console.error("ENGINE ERROR:", err.response?.data || err.message);
+        res.status(500).json({ 
+            error: "AI Engine Busy", 
+            message: "Models are calibrating. Please retry in 10s." 
+        });
     }
 });
 
-// Production Health Check
-app.get('/health', (req, res) => res.status(200).send('ReelMind AI: Online'));
-app.get('/', (req, res) => res.send('ReelMind API Active'));
+// --- SYSTEM STABILITY ---
+app.get('/', (req, res) => res.send('ReelMind AI Core: Online'));
 
-// Crash Prevention Safety Net
 app.use((err, req, res, next) => {
-    console.error("Global Safety Net:", err.stack);
-    res.status(500).json({ error: "Server encountered a minor freeze. Keeping system alive." });
+    console.error("CRITICAL SAFETY NET:", err.stack);
+    res.status(500).json({ error: "System freeze prevented." });
 });
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ReelMind Professional Engine live on ${PORT}`);
+    console.log(`🧊 REELMIND AI CORE ONLINE | PORT ${PORT}`);
 });
