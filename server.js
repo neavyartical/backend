@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { connectDB } from "./db.js";
+import User from "./models/User.js";
 
 dotenv.config();
 
@@ -8,52 +10,60 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+connectDB();
+
 const PORT = process.env.PORT || 3000;
 
-/* 👑 CHANGE THIS TO YOUR EMAIL */
+/* 👑 YOUR EMAIL */
 const OWNER_EMAIL = "artical@example.com";
-
-/* TEMP DATABASE */
-let users = {};
 
 /* ROOT */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* REGISTER */
-app.post("/register", (req, res) => {
+/* REGISTER / LOGIN */
+app.post("/register", async (req, res) => {
   const { email } = req.body;
 
-  if (!users[email]) {
-    users[email] = {
-      credits: email === OWNER_EMAIL ? "unlimited" : 10
-    };
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    user = await User.create({
+      email,
+      credits: email === OWNER_EMAIL ? 999999 : 10,
+      isOwner: email === OWNER_EMAIL
+    });
   }
 
-  res.json(users[email]);
+  res.json({
+    credits: user.isOwner ? "unlimited" : user.credits,
+    isOwner: user.isOwner
+  });
 });
 
 /* USE CREDIT */
-app.post("/use-credit", (req, res) => {
+app.post("/use-credit", async (req, res) => {
   const { email } = req.body;
 
-  if (!users[email]) return res.json({ error: "User not found" });
+  const user = await User.findOne({ email });
+  if (!user) return res.json({ error: "User not found" });
 
-  if (email === OWNER_EMAIL) {
+  if (user.isOwner || user.subscription === "pro") {
     return res.json({ credits: "unlimited" });
   }
 
-  if (users[email].credits <= 0) {
+  if (user.credits <= 0) {
     return res.json({ error: "No credits left" });
   }
 
-  users[email].credits -= 1;
+  user.credits -= 1;
+  await user.save();
 
-  res.json({ credits: users[email].credits });
+  res.json({ credits: user.credits });
 });
 
-/* GENERATE (STRICT MODE) */
+/* GENERATE */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt, mode = "story" } = req.body;
