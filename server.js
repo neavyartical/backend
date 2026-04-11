@@ -1,61 +1,84 @@
 import express from "express";
-import cors from "cors";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔑 YOUR API KEY FROM RENDER ENV
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const PORT = process.env.PORT || 3000;
 
-// 🔥 HEALTH CHECK (so “cannot GET” disappears)
+// 🔑 YOUR KEYS (PUT INSIDE RENDER ENV)
+const OPENROUTER_API = process.env.OPENROUTER_API_KEY;
+const RUNWAY_API = process.env.RUNWAY_API_KEY;
+
+// TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend is Running 🚀");
+  res.send("ReelMind Backend Running 🚀");
 });
 
-// 🧠 STORY GENERATION (ChatGPT brain via OpenRouter)
-app.post("/generate-story", async (req, res) => {
-  try {
-    const { prompt } = req.body;
+// MAIN GENERATE ROUTE
+app.post("/generate", async (req, res) => {
+  const { prompt } = req.body;
 
-    if (!OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: "Missing API key in server" });
+  try {
+    // =========================
+    // 1. STORY (OpenRouter)
+    // =========================
+    let story = "Story failed";
+
+    if (OPENROUTER_API) {
+      const storyRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-3.5-turbo",
+          messages: [
+            {
+              role: "user",
+              content: `Write a cinematic viral short story about: ${prompt}`
+            }
+          ]
+        })
+      });
+
+      const storyData = await storyRes.json();
+      story = storyData.choices?.[0]?.message?.content || "Story failed";
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages: [
-          { role: "user", content: `Write a viral cinematic story about: ${prompt}` }
-        ]
-      })
-    });
+    // =========================
+    // 2. IMAGE (Free fallback)
+    // =========================
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-    const data = await response.json();
+    // =========================
+    // 3. VIDEO (Runway placeholder structure)
+    // =========================
+    let video = "";
+
+    if (RUNWAY_API) {
+      // ⚠️ REAL Runway requires async job system
+      // For now we simulate response (so frontend works)
+      video = "https://www.w3schools.com/html/mov_bbb.mp4";
+    }
 
     res.json({
-      story: data.choices?.[0]?.message?.content || "No story generated"
+      story,
+      image,
+      video
     });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.json({
+      story: "❌ AI Error",
+      image: "",
+      video: ""
+    });
   }
 });
 
-// 🎬 VIDEO (Runway placeholder — real integration later)
-app.post("/generate-video", async (req, res) => {
-  const { prompt } = req.body;
-
-  res.json({
-    video: "https://cdn.coverr.co/videos/coverr-dog-running-1578/1080p.mp4"
-  });
-});
-
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log("Server running 🚀"));
+app.listen(PORT, () => console.log("Server running on port " + PORT));
