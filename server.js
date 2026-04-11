@@ -1,4 +1,3 @@
-
 import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
@@ -10,8 +9,6 @@ app.use(express.json());
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-console.log("KEY:", OPENROUTER_API_KEY ? "SET ✅" : "MISSING ❌");
-
 app.post("/generate", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -22,8 +19,8 @@ app.post("/generate", async (req, res) => {
 
     const lower = prompt.toLowerCase();
 
-    /* ================= TEXT (ALWAYS) ================= */
-    let resultText = "";
+    /* ========= TEXT ========= */
+    let result = "";
 
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -39,33 +36,24 @@ app.post("/generate", async (req, res) => {
       });
 
       const data = await response.json();
-      resultText = data.choices?.[0]?.message?.content || "No response";
+      result = data.choices?.[0]?.message?.content || "No response";
     } catch {
-      resultText = "⚠️ AI text failed, but other outputs may still work";
+      result = "⚠️ AI text failed";
     }
 
-    /* ================= IMAGE ================= */
+    /* ========= IMAGE (SMART FALLBACK) ========= */
     let image = null;
-    if (
-      lower.includes("image") ||
-      lower.includes("photo") ||
-      lower.includes("picture")
-    ) {
-      image = `https://picsum.photos/600/400?random=${Math.random()}`;
+    if (lower.includes("image") || lower.includes("photo") || lower.includes("picture")) {
+      image = `https://picsum.photos/800/500?random=${Math.random()}`;
     }
 
-    /* ================= VIDEO ================= */
+    /* ========= VIDEO ========= */
     let video = null;
     if (lower.includes("video")) {
       video = "https://www.w3schools.com/html/mov_bbb.mp4";
     }
 
-    /* ================= RESPONSE ================= */
-    res.json({
-      result: resultText,
-      image,
-      video
-    });
+    res.json({ result, image, video });
 
   } catch (err) {
     console.error(err);
@@ -73,8 +61,4 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(10000, () => console.log("🚀 Server running"));
