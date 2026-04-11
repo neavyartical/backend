@@ -19,13 +19,13 @@ app.post("/story", async (req, res) => {
     const { prompt } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({ error: "Prompt required" });
+      return res.json({ story: "❌ No prompt provided" });
     }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer YOUR_OPENROUTER_API_KEY",
+        "Authorization": "Bearer YOUR_REAL_OPENROUTER_KEY",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -33,11 +33,11 @@ app.post("/story", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You create ultra cinematic, viral, emotional stories."
+            content: "You create viral, cinematic, emotional stories."
           },
           {
             role: "user",
-            content: `Create a cinematic viral story about: ${prompt}`
+            content: prompt
           }
         ]
       })
@@ -45,17 +45,31 @@ app.post("/story", async (req, res) => {
 
     const data = await response.json();
 
-    if (!data.choices) {
-      return res.json({ story: "⚠️ AI not responding yet" });
+    console.log("AI RESPONSE:", data); // 🔥 SEE ERRORS IN RENDER
+
+    /* HANDLE ERRORS CLEARLY */
+    if (data.error) {
+      return res.json({
+        story: "❌ " + data.error.message
+      });
     }
 
+    if (!data.choices) {
+      return res.json({
+        story: "⚠️ No response from AI"
+      });
+    }
+
+    /* SUCCESS */
     res.json({
       story: data.choices[0].message.content
     });
 
   } catch (err) {
-    console.error(err);
-    res.json({ story: "❌ AI error" });
+    console.error("SERVER ERROR:", err);
+    res.json({
+      story: "❌ Server crashed"
+    });
   }
 });
 
