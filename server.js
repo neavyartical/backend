@@ -26,12 +26,12 @@ app.post("/generate-text", async (req, res) => {
     const data = await response.json();
     res.json(data);
 
-  } catch (err) {
+  } catch {
     res.json({ error: "Text generation failed" });
   }
 });
 
-/* ================= VIDEO ================= */
+/* ================= VIDEO START ================= */
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -51,8 +51,28 @@ app.post("/generate-video", async (req, res) => {
     const data = await response.json();
     res.json(data);
 
-  } catch (err) {
+  } catch {
     res.json({ error: "Video generation failed" });
+  }
+});
+
+/* ================= VIDEO STATUS ================= */
+app.get("/video-status/:id", async (req, res) => {
+  try {
+    const response = await fetch(`https://api.runwayml.com/v1/tasks/${req.params.id}`, {
+      headers: {
+        "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`
+      }
+    });
+
+    const data = await response.json();
+
+    res.json({
+      video_url: data.output?.video || null
+    });
+
+  } catch {
+    res.json({ error: "Status check failed" });
   }
 });
 
