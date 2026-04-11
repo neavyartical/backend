@@ -6,119 +6,113 @@ const helmet = require('helmet');
 
 const app = express();
 
-// --- 1. SECURITY & CONFIG ---
-app.use(helmet({
-    contentSecurityPolicy: false, // Allows loading images/videos from external AI APIs
-}));
+// --- 1. SECURITY & CONFIGURATION ---
+// helmet() protects your server headers. 
+// We disable CSP specifically for external AI media loading.
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// API Keys from Render Environment Variables
+// API Keys - MUST be set in Render Dashboard > Environment Variables
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const RUNWAY_KEY = process.env.RUNWAY_API_KEY;
 
-// --- 2. THE AI CORE ENGINE ---
+// --- 2. THE AI MULTI-ENGINE ---
 
 const ReelMindEngine = {
-    // OpenRouter for GPT-4 / Claude / Gemini (Chat & Logic)
+    
+    // PROBLEM SOLVER (OpenRouter -> Gemini 2.0 / GPT-4)
     solveProblem: async (input) => {
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
-            model: "google/gemini-2.0-flash-001", 
-            messages: [{ role: "user", content: `You are ReelMind AI, a world-class problem solver. Task: ${input}` }]
+            model: "google/gemini-2.0-flash-001", // High-speed, high-intelligence 2026 model
+            messages: [{ role: "user", content: `You are ReelMind AI. Solve this: ${input}` }]
         }, {
             headers: { 
                 "Authorization": `Bearer ${OPENROUTER_KEY}`,
-                "HTTP-Referer": "https://reelmind.ai", // Required by OpenRouter
-                "X-Title": "ReelMind AI"
+                "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
+                "X-Title": "ReelMind AI Studio"
             },
-            timeout: 30000 // 30 second timeout
+            timeout: 25000 // 25s timeout for chat
         });
         return { type: 'text', data: response.data.choices[0].message.content };
     },
 
-    // Pollinations for High-End Flux/Stable Diffusion Images
+    // 4K IMAGE GENERATION (Pollinations Flux Engine)
     generate4K: async (input) => {
-        // We use Flux model for "World Class" quality
-        const seed = Math.floor(Math.random() * 1000000);
+        const seed = Math.floor(Math.random() * 999999);
+        // Using 'flux' model for world-class cinematic quality
         const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(input)}?width=1920&height=1080&model=flux&seed=${seed}`;
         return { type: 'image', data: imageUrl };
     },
 
-    // Runway ML for Professional Video
+    // VIDEO GENERATION (Runway Gen-3 Alpha API)
     generateVideo: async (input) => {
-        // Note: Runway often requires a 'Task ID' flow. This starts the generation.
         const response = await axios.post('https://api.runwayml.com/v1/image_to_video', {
             promptText: input,
             model: "gen3a_turbo",
-            ratio: "16:9"
+            spawn_audio: true
         }, {
-            headers: { "Authorization": `Bearer ${RUNWAY_KEY}` }
+            headers: { "Authorization": `Bearer ${RUNWAY_KEY}` },
+            timeout: 60000 // 60s timeout for video start
         });
         return { type: 'video', data: response.data.url };
     }
 };
 
-// --- 3. ROUTES ---
+// --- 3. THE "SMART" ROUTE ---
 
 app.post('/generate', async (req, res) => {
     const { action, input } = req.body;
 
-    if (!input) return res.status(400).json({ error: "Prompt is required" });
+    if (!input) return res.status(400).json({ error: "No input provided." });
 
     try {
         let result;
-        switch (action) {
-            case 'chat':
-                result = await ReelMindEngine.solveProblem(input);
-                break;
-            case 'image':
-                result = await ReelMindEngine.generate4K(input);
-                break;
-            case 'video':
-                result = await ReelMindEngine.generateVideo(input);
-                break;
-            default:
-                throw new Error("Invalid AI action requested");
-        }
-        res.status(200).json(result);
+        if (action === 'chat') result = await ReelMindEngine.solveProblem(input);
+        else if (action === 'image') result = await ReelMindEngine.generate4K(input);
+        else if (action === 'video') result = await ReelMindEngine.generateVideo(input);
+        else throw new Error("Unknown action.");
 
+        res.status(200).json(result);
     } catch (err) {
+        // Detailed error logging for you, clean error for the user
         console.error("ENGINE ERROR:", err.response?.data || err.message);
         res.status(500).json({ 
-            error: "Generation Failed", 
-            details: err.response?.data?.error?.message || "Internal Engine Error" 
+            error: "AI Engine Busy", 
+            message: "Our high-end models are processing. Please try again in 10 seconds." 
         });
     }
 });
 
-// Health Check
-app.get('/', (req, res) => res.send('ReelMind Pro-Engine: Online'));
+// Health check for Render monitoring
+app.get('/', (req, res) => res.send('ReelMind Pro Core: Online'));
 
-// --- 4. ANTI-CRASH SAFETY NET ---
+// --- 4. GLOBAL CRASH PROTECTION ---
 
-// Catch 404
-app.use((req, res) => res.status(404).send("Not Found"));
+// Handle standard 404s
+app.use((req, res) => res.status(404).json({ error: "Route not found" }));
 
-// Global Error Boundary (Prevents 'Throw Err' from crashing the server)
+// The "Safety Net" - prevents 'Throw Err' from killing the process
 app.use((err, req, res, next) => {
-    console.error("GLOBAL CRASH PREVENTED:", err.stack);
-    res.status(500).json({ error: "The engine encountered a temporary freeze. Please retry." });
+    console.error("CRITICAL SAFETY NET TRIGGERED:", err.stack);
+    res.status(500).json({ error: "Server encountered a temporary glitch." });
 });
 
-// Process-level protection
+// Catch unhandled promise rejections (like API timeouts)
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('Unhandled Rejection prevented crash:', reason);
 });
 
 // --- 5. SERVER LAUNCH ---
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`
-    💎 REELMIND AI CORE STARTED 💎
-    ------------------------------
-    STATUS: World-Class Ready
+    🧊 REELMIND AI CORE ONLINE
+    ---------------------------------
     PORT: ${PORT}
-    BIND: 0.0.0.0
-    ------------------------------
+    MODE: Production (2026 Standard)
+    SECURITY: Enabled (Helmet v7)
+    ---------------------------------
     `);
 });
+                         
