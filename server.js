@@ -22,10 +22,16 @@ app.post("/story", async (req, res) => {
       return res.json({ story: "❌ No prompt provided" });
     }
 
+    const API_KEY = process.env.OPENROUTER_KEY;
+
+    if (!API_KEY) {
+      return res.json({ story: "❌ Missing API key in server" });
+    }
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer YOUR_REAL_OPENROUTER_KEY",
+        "Authorization": `Bearer ${API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -33,7 +39,7 @@ app.post("/story", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You create viral, cinematic, emotional stories."
+            content: "You create ultra cinematic, viral, emotional stories."
           },
           {
             role: "user",
@@ -45,24 +51,16 @@ app.post("/story", async (req, res) => {
 
     const data = await response.json();
 
-    console.log("AI RESPONSE:", data); // 🔥 SEE ERRORS IN RENDER
+    console.log("AI RESPONSE:", data);
 
-    /* HANDLE ERRORS CLEARLY */
     if (data.error) {
       return res.json({
         story: "❌ " + data.error.message
       });
     }
 
-    if (!data.choices) {
-      return res.json({
-        story: "⚠️ No response from AI"
-      });
-    }
-
-    /* SUCCESS */
     res.json({
-      story: data.choices[0].message.content
+      story: data.choices?.[0]?.message?.content || "⚠️ No story returned"
     });
 
   } catch (err) {
