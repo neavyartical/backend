@@ -1,16 +1,21 @@
-
 import express from "express";
 
 const app = express();
+app.use(express.json());
 
-/* ROOT ROUTE */
+/* ROOT */
 app.get("/", (req, res) => {
-  res.send("🔥 BACKEND FIXED AND WORKING");
+  res.send("🔥 BACKEND LIVE");
 });
 
-/* TEST ROUTE */
-app.get("/test", (req, res) => {
-  res.json({ status: "OK ✅" });
+/* STORY TEST */
+app.post("/story", (req, res) => {
+  const { prompt } = req.body;
+
+  res.json({
+    success: true,
+    story: `This is a test story for: ${prompt}`
+  });
 });
 
 app.listen(process.env.PORT || 10000, () => {
