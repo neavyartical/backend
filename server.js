@@ -3,35 +3,61 @@ import cors from "cors";
 
 const app = express();
 
-/* MIDDLEWARE (VERY IMPORTANT) */
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 
-/* ROOT */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
-  res.send("🔥 BACKEND LIVE");
+  res.send("🔥 ReelMind Backend Live");
 });
 
-/* STORY ROUTE */
-app.post("/story", (req, res) => {
+/* ================= AI STORY (OPENROUTER) ================= */
+app.post("/story", async (req, res) => {
   try {
     const { prompt } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({ error: "No prompt" });
+      return res.status(400).json({ error: "Prompt required" });
     }
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer YOUR_OPENROUTER_API_KEY",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a cinematic AI that creates viral, emotional, high-quality stories."
+          },
+          {
+            role: "user",
+            content: `Create a short viral cinematic story about: ${prompt}`
+          }
+        ]
+      })
+    });
+
+    const data = await response.json();
+
+    const story = data.choices?.[0]?.message?.content;
 
     res.json({
       success: true,
-      story: `🔥 Cinematic story for: ${prompt}`
+      story: story || "No story generated"
     });
 
   } catch (err) {
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "AI generation failed" });
   }
 });
 
-/* START SERVER */
+/* ================= START SERVER ================= */
 app.listen(process.env.PORT || 10000, () => {
-  console.log("Server running...");
+  console.log("🚀 Server running...");
 });
