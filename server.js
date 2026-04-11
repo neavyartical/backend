@@ -4,55 +4,58 @@ const cors = require('cors');
 const helmet = require('helmet');
 
 const app = express();
-
-// --- 1. MIDDLEWARE ---
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// --- 2. THE "STORY" LOGIC ---
-// I've wrapped this in a try-catch block to prevent "throw err" crashes
-app.get('/story', (req, res) => {
+// --- AI LOGIC SIMULATOR ---
+// Replace the console.logs with actual API calls (OpenAI, Runway, etc.) using axios
+const ReelMindAI = {
+    generateImage: async (prompt) => {
+        console.log(`Creating 4K Cinematic Image: ${prompt}`);
+        return { url: "https://via.placeholder.com/1024", status: "Success", type: "image" }; 
+    },
+    generateVideo: async (prompt) => {
+        console.log(`Generating AI Video: ${prompt}`);
+        return { url: "https://www.w3schools.com/html/mov_bbb.mp4", status: "Success", type: "video" };
+    },
+    chatAI: async (query) => {
+        console.log(`Answering query: ${query}`);
+        return { answer: `ReelMind AI Response: Here is the information regarding "${query}"...`, type: "chat" };
+    }
+};
+
+// --- ROUTES ---
+
+// 1. Unified Generation Route
+app.post('/generate', async (req, res) => {
+    const { action, input } = req.body;
     try {
-        // Example Data - Replace with your DB logic if needed
-        const stories = [
-            { id: 1, title: "The First Reel", content: "Welcome to the story API." }
-        ];
-        
-        res.status(200).json(stories);
+        let result;
+        if (action === 'image') result = await ReelMindAI.generateImage(input);
+        else if (action === 'video') result = await ReelMindAI.generateVideo(input);
+        else if (action === 'chat') result = await ReelMindAI.chatAI(input);
+        else return res.status(400).json({ error: "Invalid action type" });
+
+        res.status(200).json(result);
     } catch (err) {
-        // Instead of throwing the error, we send a JSON response
-        console.error("Route Error:", err.message);
-        res.status(500).json({ error: "Internal Server Error" });
+        res.status(500).json({ error: "Generation failed", details: err.message });
     }
 });
 
-// --- 3. HEALTH CHECK (For Render) ---
-app.get('/', (req, res) => {
-    res.send('Server is active and running.');
+// 2. Stories Route
+app.get('/story', (req, res) => {
+    res.json([
+        { id: 1, title: "The AI Revolution", content: "In a world governed by code..." },
+        { id: 2, title: "Cinematic Dreams", content: "The lens captured what the heart felt." }
+    ]);
 });
 
-// --- 4. GLOBAL ERROR HANDLER ---
-// This is the "safety net" that catches any error in the entire app
-app.use((err, req, res, next) => {
-    console.error("Caught by Safety Net:", err.stack);
-    res.status(500).send('Something broke! Check the server logs.');
-});
+// 3. Health Check
+app.get('/', (req, res) => res.send('ReelMind AI Engine Online'));
 
-// --- 5. SERVER STARTUP ---
-// Render uses the PORT env variable; 10000 is the backup.
+// --- START SERVER ---
 const PORT = process.env.PORT || 10000;
-
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    ✅ Server is live!
-    📍 Port: ${PORT}
-    🔗 URL: http://localhost:${PORT}
-    `);
-});
-
-// Handle unhandled promise rejections (like DB connection failures)
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // Application continues running instead of crashing
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 ReelMind Backend Live on Port ${PORT}`);
 });
