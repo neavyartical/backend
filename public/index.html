@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>ReelMind AI</title>
 
-  <!-- ADSENSE (ALREADY ADDED) -->
+  <!-- ✅ ADSENSE -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-726799"
      crossorigin="anonymous"></script>
 
@@ -12,36 +12,15 @@
 </head>
 <body>
 
-  <!-- BACKGROUND -->
-  <div class="overlay"></div>
-
-  <!-- APP -->
   <div class="app">
 
-    <!-- LOGO -->
-    <div class="logo">
-      <h1>ReelMind <span>AI</span></h1>
-    </div>
+    <h1>ReelMind <span>AI</span></h1>
+    <p>Powered by Artical Neavy</p>
 
-    <p class="powered">Powered by Artical Neavy</p>
-
-    <!-- TOP AD -->
-    <div style="margin: 15px 0;">
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-726799"
-           data-ad-slot="1234567890"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
-    </div>
-
-    <!-- INPUT -->
     <textarea id="prompt" placeholder="Enter your idea..."></textarea>
 
-    <!-- GENERATE BUTTON -->
-    <button id="generateBtn" onclick="generate('all')">✨ Generate</button>
+    <button onclick="generate('all')">✨ Generate</button>
 
-    <!-- GRID -->
     <div class="grid">
       <button onclick="generate('story')">📖 Story</button>
       <button onclick="generate('image')">🖼 Image</button>
@@ -49,25 +28,20 @@
       <button onclick="askAI()">🌍 Ask AI</button>
     </div>
 
-    <!-- RESULT -->
     <div id="result"></div>
 
-    <!-- AD AFTER RESULT -->
-    <div style="margin: 20px 0;">
-      <ins class="adsbygoogle"
-           style="display:block"
-           data-ad-client="ca-pub-726799"
-           data-ad-slot="9876543210"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
-    </div>
+    <!-- ✅ AD -->
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-726799"
+         data-ad-slot="1234567890"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
 
-    <!-- DOWNLOAD -->
-    <button id="downloadBtn" onclick="downloadResult()">⬇ Download</button>
+    <button onclick="downloadResult()">⬇ Download</button>
 
   </div>
 
-  <!-- ADS INITIALIZER -->
   <script>
     (adsbygoogle = window.adsbygoogle || []).push({});
   </script>
