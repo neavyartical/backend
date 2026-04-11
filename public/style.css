@@ -1,1 +1,44 @@
+/* AUTH SCREEN */
+.auth {
+  text-align: center;
+  margin-top: 100px;
+}
+
+.auth input {
+  display: block;
+  width: 80%;
+  margin: 10px auto;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+}
+
+.auth button {
+  margin: 5px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  background: #00d4ff;
+  cursor: pointer;
+}
+
+/* HIDE */
+.hidden {
+  display: none;
+}
+
+/* TOPBAR */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.topbar button {
+  background: red;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 8px;
+}
 
