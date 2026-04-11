@@ -1,36 +1,19 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const storyRoutes = require('./routes/storyRoutes');
 
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// STORY API
-app.post("/story", async (req, res) => {
-  const { prompt } = req.body;
+// Routes
+app.use('/story', storyRoutes);
 
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer YOUR_OPENROUTER_KEY",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openchat/openchat-3.5",
-        messages: [
-          { role: "user", content: "Write a viral short story: " + prompt }
-        ]
-      })
-    });
-
-    const data = await response.json();
-    res.json(data);
-
-  } catch (err) {
-    res.status(500).json({ error: "Story failed" });
-  }
+// Essential Render Config: Bind to PORT or default to 10000
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
 });
-
-app.listen(3000, () => console.log("Server running on port 3000"));
