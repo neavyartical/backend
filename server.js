@@ -1,22 +1,15 @@
 const express = require("express");
 const path = require("path");
-require("dotenv").config();
 
 const app = express();
 
-// ✅ Middleware
+// Middleware
 app.use(express.json());
 
-// ✅ Serve frontend
-const publicPath = path.join(__dirname, "public");
-app.use(express.static(publicPath));
+// Serve frontend
+app.use(express.static("public"));
 
-// ✅ API route
-app.get("/api/health", (req, res) => {
-  res.json({ status: "OK 🚀" });
-});
-
-// ✅ AI route
+// API (for your buttons)
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
@@ -47,18 +40,14 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ FORCE frontend for ALL routes (bulletproof)
+// Always load frontend
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"), (err) => {
-    if (err) {
-      res.status(500).send("❌ index.html not found. Check /public folder.");
-    }
-  });
+  res.sendFile(path.resolve("public/index.html"));
 });
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("🚀 Server running...");
 });
