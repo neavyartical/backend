@@ -6,91 +6,68 @@ const helmet = require('helmet');
 
 const app = express();
 
-// --- 1. PRO-TIER SECURITY ---
-// Set security headers, but allow loading external media from Pollinations/Runway
+// --- 1. GLOBAL SECURITY & MEDIA ACCESS ---
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 
-// --- 2. API CONFIGURATION (Render Environment Variables) ---
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;
 const RUNWAY_KEY = process.env.RUNWAY_API_KEY;
 
-// --- 3. THE BURST-MODE ROUTE ---
+// --- 2. THE GLOBAL GENERATION GATE ---
 app.post('/generate', async (req, res) => {
     const { prompt } = req.body;
 
-    if (!prompt) return res.status(400).json({ error: "Input prompt is required." });
+    if (!prompt) return res.status(400).json({ error: "No input vision." });
 
-    // --- Concurrent Generation Tasks ---
     try {
-        console.log(`💎 REELMIND CORE Level 17: Multi-Modal Burst for prompt: "${prompt}"`);
+        console.log(`🌐 GLOBAL ENGINE: Processing ${prompt}`);
 
-        // TASK 1: CHAT & SCRIPTING (OpenRouter)
+        // TASK 1: NATIVE LANGUAGE AI (Supports Krio, Pidgin, Wolof, etc.)
         const chatTask = axios.post('https://openrouter.ai/api/v1/chat/completions', {
             model: "google/gemini-2.0-flash-001",
-            messages: [{ role: "user", content: `You are ReelMind AI Level 17 SaaS. Write a world-class problem solution and short script for: "${prompt}"` }]
+            messages: [{ 
+                role: "system", 
+                content: "You are the ReelMind Global AI. Detect the user's language and respond fluently. If the user speaks in Sierra Leone Krio, Pidgin, or any native dialect, respond perfectly in that same dialect. Keep it cinematic."
+            }, 
+            { role: "user", content: prompt }]
         }, {
-            headers: { 
-                "Authorization": `Bearer ${OPENROUTER_KEY}`,
-                "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
-                "X-Title": "ReelMind Pro Engine"
-            },
-            timeout: 25000 // 25s timeout for chat
+            headers: { "Authorization": `Bearer ${OPENROUTER_KEY}` }
         });
 
-        // TASK 2: 4K IMAGE GENERATION (Pollinations)
+        // TASK 2: INSTANT PREVIEW (Pollinations)
         const seed = Math.floor(Math.random() * 999999);
-        // We use Flux model for "World Class" quality
-        const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt + " ultra cinematic 8k detail unreal engine 5 dramatic lighting") }?width=1920&height=1080&model=flux&seed=${seed}`;
-        
-        // TASK 3: VIDEO GENERATION (Runway Gen-3 Alpha API)
+        const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt + " cinematic 8k ultra-detailed unreal engine 5") }?width=1920&height=1080&model=flux&seed=${seed}`;
+
+        // TASK 3: VIDEO TASKING (Runway)
         const runwayTask = axios.post('https://api.runwayml.com/v1/image_to_video', {
             promptText: prompt,
             model: "gen3a_turbo"
         }, {
-            headers: { 
-                "Authorization": `Bearer ${RUNWAY_KEY}`,
-                "Content-Type": "application/json"
-            }
-        });
+            headers: { "Authorization": `Bearer ${RUNWAY_KEY}`, "Content-Type": "application/json" }
+        }).catch(() => ({ data: { url: "QUEUED" } }));
 
-        // --- Execute concurrent tasks ---
-        // Note: We don't wait for Runway to *finish*, we only wait for it to *accept* the task.
-        const [chatResponse, runwayResponse] = await Promise.all([
-            chatTask.catch(e => ({ data: { choices: [{ message: { content: "Text calibration issue." } }] } })),
-            runwayTask.catch(e => ({ data: { url: "VIDEO_TASK_QUEUED" } }))
-        ]);
+        const [chatResponse, runwayResponse] = await Promise.all([chatTask, runwayTask]);
 
-        // Unified professional SaaS response
-        res.status(200).json({
+        res.json({
             text: chatResponse.data.choices[0].message.content,
             image: imageUrl,
-            // Runway sends a temporary URL or Task ID to poll. We pass it along.
-            videoTask: runwayResponse.data.url 
+            videoTask: runwayResponse.data.url
         });
 
     } catch (err) {
-        console.error("CORE ERROR:", err.message);
-        res.status(500).json({ error: "High-Priority Node Congestion", message: "Calibration required. Retry in 15s." });
+        console.error("CORE CRASH PREVENTED:", err.message);
+        res.status(500).json({ error: "System Calibrating", message: "Retry in 10s." });
     }
 });
 
-// --- STABILITY SETTINGS & HEALTH CHECK ---
-app.get('/', (req, res) => res.send('ReelMind Pro Core: Burst Engine Online v2.3.0'));
+// --- 3. STABILITY MONITOR ---
+app.get('/', (req, res) => res.send('ReelMind Global Core v2.4.0: Active'));
 
-// Safety Net to prevent crashing from unhandled throw-err logic
 app.use((err, req, res, next) => {
-    console.error("GLOBAL SAFETY NET TRIGGERED:", err.stack);
-    res.status(500).json({ error: "System Freeze Bypassed. Keeping Nodes Online." });
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection prevented crash:', reason);
+    console.error("CRITICAL ERROR BYPASS:", err.stack);
+    res.status(500).json({ error: "Engine recovery active." });
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 REELMIND CORE LIVE ON ${PORT}`);
-});
-            
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 ReelMind Global Online: ${PORT}`));
