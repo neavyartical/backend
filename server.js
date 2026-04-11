@@ -1,38 +1,40 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 10000;
+// ✅ ENV KEYS
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY;
+const RUNWAY_KEY = process.env.RUNWAY_KEY;
 
-const OPENROUTER_API = process.env.OPENROUTER_API_KEY;
-const RUNWAY_API = process.env.RUNWAY_API_KEY;
-
-/* ===== ROOT ===== */
+// TEST ROUTE
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀");
+  res.send("ReelMind Backend Running ✅");
 });
 
-/* ===== GENERATE ALL ===== */
+// MAIN GENERATE ROUTE
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    /* ================= STORY ================= */
-    let story = "Story failed";
 
-    if (OPENROUTER_API) {
+    // =========================
+    // 🎬 STORY (OpenRouter)
+    // =========================
+    let story = "Story unavailable";
+
+    try {
       const storyRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${OPENROUTER_API}`,
+          "Authorization": `Bearer ${OPENROUTER_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "openai/gpt-4o-mini",
+          model: "openai/gpt-3.5-turbo",
           messages: [
             {
               role: "user",
@@ -44,66 +46,44 @@ app.post("/generate", async (req, res) => {
 
       const storyData = await storyRes.json();
       story = storyData.choices?.[0]?.message?.content || "Story failed";
+
+    } catch (err) {
+      console.log("Story error:", err.message);
     }
 
-    /* ================= IMAGE ================= */
-    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+    // =========================
+    // 🖼 IMAGE (Free fallback)
+    // =========================
+    const image = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/600/400`;
 
-    /* ================= VIDEO (RUNWAY REAL) ================= */
-    let video = null;
+    // =========================
+    // 🎥 VIDEO (Fallback / Runway later)
+    // =========================
+    let video = "https://www.w3schools.com/html/mov_bbb.mp4";
 
-    if (RUNWAY_API) {
-      // STEP 1: CREATE JOB
-      const create = await fetch("https://api.runwayml.com/v1/image_to_video", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${RUNWAY_API}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          promptText: prompt,
-          duration: 5,
-          ratio: "16:9"
-        })
-      });
+    // (Optional future Runway API goes here)
 
-      const createData = await create.json();
-
-      const taskId = createData.id;
-
-      // STEP 2: POLLING
-      for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-
-        const check = await fetch(`https://api.runwayml.com/v1/tasks/${taskId}`, {
-          headers: {
-            "Authorization": `Bearer ${RUNWAY_API}`
-          }
-        });
-
-        const result = await check.json();
-
-        if (result.status === "SUCCEEDED") {
-          video = result.output[0];
-          break;
-        }
-      }
-    }
-
+    // =========================
+    // ✅ FINAL JSON RESPONSE
+    // =========================
     res.json({
+      success: true,
       story,
       image,
       video
     });
 
-  } catch (err) {
-    console.error(err);
-    res.json({
-      story: "❌ AI error",
+  } catch (error) {
+    console.log("Server error:", error);
+
+    res.status(500).json({
+      success: false,
+      story: "Server error",
       image: "",
-      video: null
+      video: ""
     });
   }
 });
 
-app.listen(PORT, () => console.log("Server running 🚀"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log("Server running on port", PORT));
