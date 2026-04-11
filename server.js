@@ -7,20 +7,21 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Serve frontend (VERY IMPORTANT)
-app.use(express.static(path.join(__dirname, "public")));
+// ✅ Serve static frontend
+const publicPath = path.join(__dirname, "public");
+app.use(express.static(publicPath));
 
-// ✅ API route (test)
+// ✅ API route
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ Example AI route (so your buttons work)
+// ✅ AI route
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
   if (!prompt) {
-    return res.json({ result: "❌ No prompt provided" });
+    return res.json({ result: "❌ Enter something first" });
   }
 
   if (type === "image") {
@@ -31,29 +32,29 @@ app.post("/generate", (req, res) => {
 
   if (type === "story") {
     return res.json({
-      result: `📖 Story: Once upon a time, ${prompt} became a viral sensation...`
+      result: `📖 Story: ${prompt} turned into something viral...`
     });
   }
 
   if (type === "video") {
     return res.json({
-      result: `🎬 Video idea: Create a cinematic reel about "${prompt}" with trending music.`
+      result: `🎬 Video idea: Make a viral reel about "${prompt}".`
     });
   }
 
   res.json({
-    result: `✨ AI Result: "${prompt}" is a powerful idea that can go viral!`
+    result: `✨ AI Result: ${prompt}`
   });
 });
 
-// ✅ Default route (VERY IMPORTANT)
+// ✅ FORCE frontend for ALL routes (VERY IMPORTANT)
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
 // ✅ Start server
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server stable on port ${PORT}`);
 });
