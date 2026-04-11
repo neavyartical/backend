@@ -1,7 +1,7 @@
 {
-  "name": "reelmind-unlimited-burst",
-  "version": "2.3.0",
-  "description": "ReelMind Pro Engine with Simultaneous Pollinations & Runway Burst Mode",
+  "name": "reelmind-global-unlimited",
+  "version": "2.4.0",
+  "description": "Global ReelMind AI with Native Language Support",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
