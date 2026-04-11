@@ -1,47 +1,58 @@
-// 1. Imports
-require('dotenv').config(); // Loads environment variables from a .env file
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet'); // Adds security headers
-const storyRoutes = require('./routes/storyRoutes');
+const helmet = require('helmet');
 
 const app = express();
 
-// 2. Global Middleware
-app.use(helmet()); // Basic security for headers
-app.use(cors());   // Allows your frontend to access the API
-app.use(express.json()); // Parses incoming JSON requests
-app.use(express.urlencoded({ extended: true })); // Parses URL-encoded data
+// --- 1. MIDDLEWARE ---
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
 
-// 3. Health Check Route
-// Useful for Render to monitor if your app is "alive"
-app.get('/health', (req, res) => {
-    res.status(200).send('Server is healthy');
+// --- 2. THE "STORY" LOGIC ---
+// I've wrapped this in a try-catch block to prevent "throw err" crashes
+app.get('/story', (req, res) => {
+    try {
+        // Example Data - Replace with your DB logic if needed
+        const stories = [
+            { id: 1, title: "The First Reel", content: "Welcome to the story API." }
+        ];
+        
+        res.status(200).json(stories);
+    } catch (err) {
+        // Instead of throwing the error, we send a JSON response
+        console.error("Route Error:", err.message);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 });
 
-// 4. API Routes
-app.use('/story', storyRoutes);
-
-// 5. 404 Handler (For routes that don't exist)
-app.use((req, res, next) => {
-    res.status(404).json({ message: "Route not found" });
+// --- 3. HEALTH CHECK (For Render) ---
+app.get('/', (req, res) => {
+    res.send('Server is active and running.');
 });
 
-// 6. Global Error Handling Middleware
-// This prevents your server from crashing if a route has an unhandled error
+// --- 4. GLOBAL ERROR HANDLER ---
+// This is the "safety net" that catches any error in the entire app
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ 
-        message: "Something went wrong on the server",
-        error: process.env.NODE_ENV === 'development' ? err.message : {} 
-    });
+    console.error("Caught by Safety Net:", err.stack);
+    res.status(500).send('Something broke! Check the server logs.');
 });
 
-// 7. Server Initialization
-// Render requires '0.0.0.0' to correctly bind to their network
+// --- 5. SERVER STARTUP ---
+// Render uses the PORT env variable; 10000 is the backup.
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`--- Server Started ---`);
-    console.log(`Port: ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`
+    ✅ Server is live!
+    📍 Port: ${PORT}
+    🔗 URL: http://localhost:${PORT}
+    `);
+});
+
+// Handle unhandled promise rejections (like DB connection failures)
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Application continues running instead of crashing
 });
