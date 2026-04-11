@@ -15,16 +15,16 @@ app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* GENERATE (STORY + IMAGE + VIDEO) */
+/* GENERATE EVERYTHING */
 app.post("/generate", async (req, res) => {
-  const { prompt } = req.body;
-
   try {
-    /* ---------- STORY (OpenRouter) ---------- */
+    const { prompt } = req.body;
+
+    /* ---------- STORY ---------- */
     let story = `🔥 Cinematic story for: ${prompt}`;
 
     if (process.env.OPENROUTER_API_KEY) {
-      const storyRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -33,31 +33,27 @@ app.post("/generate", async (req, res) => {
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
           messages: [
-            {
-              role: "user",
-              content: `Write a cinematic viral story: ${prompt}`
-            }
+            { role: "user", content: `Write a cinematic viral story: ${prompt}` }
           ]
         })
       });
 
-      const storyData = await storyRes.json();
-      story = storyData.choices?.[0]?.message?.content || story;
+      const data = await response.json();
+      story = data.choices?.[0]?.message?.content || story;
     }
 
-    /* ---------- IMAGE (SAFE PLACEHOLDER / HF LATER) ---------- */
+    /* ---------- IMAGE ---------- */
     const image = `https://picsum.photos/seed/${encodeURIComponent(prompt)}/600/400`;
 
-    /* ---------- VIDEO (RUNWAY READY) ---------- */
+    /* ---------- VIDEO ---------- */
     let video = "";
 
     if (process.env.RUNWAY_API_KEY) {
-      // ⚠️ REAL Runway integration will go here after payment
-      // For now we keep it safe (no demo loop, no crash)
+      // Future real Runway integration
       video = "";
     }
 
-    /* ---------- FINAL RESPONSE (THIS IS YOUR JSON FIX) ---------- */
+    /* ---------- FINAL JSON ---------- */
     res.json({
       story,
       image,
@@ -65,7 +61,7 @@ app.post("/generate", async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Generate error:", error);
 
     res.status(500).json({
       story: "❌ Generation failed",
@@ -75,15 +71,15 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-/* ASK ANYTHING (GOOGLE-LIKE AI) */
+/* ASK ANYTHING */
 app.post("/ask", async (req, res) => {
-  const { question } = req.body;
-
   try {
-    let answer = `🌍 Answer: ${question}`;
+    const { question } = req.body;
+
+    let answer = `🌍 ${question}`;
 
     if (process.env.OPENROUTER_API_KEY) {
-      const aiRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -91,25 +87,18 @@ app.post("/ask", async (req, res) => {
         },
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
-          messages: [
-            {
-              role: "user",
-              content: question
-            }
-          ]
+          messages: [{ role: "user", content: question }]
         })
       });
 
-      const aiData = await aiRes.json();
-      answer = aiData.choices?.[0]?.message?.content || answer;
+      const data = await response.json();
+      answer = data.choices?.[0]?.message?.content || answer;
     }
 
     res.json({ answer });
 
   } catch (error) {
-    res.status(500).json({
-      answer: "❌ AI not responding"
-    });
+    res.status(500).json({ answer: "❌ AI not responding" });
   }
 });
 
