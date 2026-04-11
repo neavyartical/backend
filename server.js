@@ -7,15 +7,15 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Serve frontend (VERY IMPORTANT)
+// ✅ Serve frontend
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ Test API route
+// ✅ API route
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ Default route (loads your app)
+// ✅ Default route (VERY IMPORTANT)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
