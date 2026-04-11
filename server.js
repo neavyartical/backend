@@ -10,12 +10,41 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+/* TEMP USER STORAGE */
+let users = {};
+
 /* ROOT */
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-/* GENERATE (CREDIT SAVING) */
+/* REGISTER */
+app.post("/register", (req, res) => {
+  const { email } = req.body;
+
+  if (!users[email]) {
+    users[email] = { credits: 10 };
+  }
+
+  res.json({ credits: users[email].credits });
+});
+
+/* USE CREDIT */
+app.post("/use-credit", (req, res) => {
+  const { email } = req.body;
+
+  if (!users[email]) return res.json({ error: "User not found" });
+
+  if (users[email].credits <= 0) {
+    return res.json({ error: "No credits left" });
+  }
+
+  users[email].credits -= 1;
+
+  res.json({ credits: users[email].credits });
+});
+
+/* GENERATE (SMART + CREDIT SAVING) */
 app.post("/generate", async (req, res) => {
   try {
     const { prompt, mode = "story", language = "english" } = req.body;
@@ -29,8 +58,6 @@ app.post("/generate", async (req, res) => {
       style = "Write simple easy English story:";
     }
 
-    /* ONLY RUN WHAT IS REQUESTED */
-
     if (mode === "story") {
       story = `🔥 ${prompt}`;
 
@@ -43,9 +70,7 @@ app.post("/generate", async (req, res) => {
           },
           body: JSON.stringify({
             model: "openai/gpt-4o-mini",
-            messages: [
-              { role: "user", content: `${style} ${prompt}` }
-            ]
+            messages: [{ role: "user", content: `${style} ${prompt}` }]
           })
         });
 
@@ -59,7 +84,7 @@ app.post("/generate", async (req, res) => {
     }
 
     else if (mode === "video") {
-      video = ""; // runway later
+      video = "";
     }
 
     else if (mode === "all") {
@@ -70,7 +95,6 @@ app.post("/generate", async (req, res) => {
     res.json({ story, image, video });
 
   } catch (error) {
-    console.error(error);
     res.status(500).json({ story: "", image: "", video: "" });
   }
 });
@@ -78,12 +102,7 @@ app.post("/generate", async (req, res) => {
 /* ASK */
 app.post("/ask", async (req, res) => {
   try {
-    const { question, language = "english" } = req.body;
-
-    let prefix = "";
-    if (language === "krio") {
-      prefix = "Explain in simple English: ";
-    }
+    const { question } = req.body;
 
     let answer = question;
 
@@ -96,7 +115,7 @@ app.post("/ask", async (req, res) => {
         },
         body: JSON.stringify({
           model: "openai/gpt-4o-mini",
-          messages: [{ role: "user", content: prefix + question }]
+          messages: [{ role: "user", content: question }]
         })
       });
 
