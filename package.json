@@ -1,7 +1,7 @@
 {
-  "name": "reelmind-unlimited-pro",
-  "version": "2.2.0",
-  "description": "Premium ReelMind AI Engine with Unified Logic",
+  "name": "reelmind-unlimited-burst",
+  "version": "2.3.0",
+  "description": "ReelMind Pro Engine with Simultaneous Pollinations & Runway Burst Mode",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
