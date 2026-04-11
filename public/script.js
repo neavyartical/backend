@@ -1,37 +1,31 @@
-
-// ===============================
-// CONFIG
-// ===============================
-const API_URL = "https://reelmindbackend-1.onrender.com";
-
-// ===============================
-// GENERATE FUNCTION
-// ===============================
-async function generate(type = "all") {
+function generate(type) {
   const prompt = document.getElementById("prompt").value;
-  const resultDiv = document.getElementById("result");
+  const result = document.getElementById("result");
 
   if (!prompt) {
-    alert("Please enter something!");
+    result.innerHTML = "❌ Enter something first";
     return;
   }
 
-  resultDiv.innerHTML = "⏳ Generating...";
+  if (type === "story") {
+    result.innerHTML = "📖 Generating story...<br><br>" + prompt;
+  } else if (type === "image") {
+    result.innerHTML = `<img src="https://via.placeholder.com/300" />`;
+  } else {
+    result.innerHTML = "✨ Generating...";
+  }
+}
 
-  try {
-    const res = await fetch(`${API_URL}/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt, type }),
-    });
+function askAI() {
+  alert("AI coming soon 🚀");
+}
 
-    const data = await res.json();
+function downloadResult() {
+  const text = document.getElementById("result").innerText;
+  const blob = new Blob([text], { type: "text/plain" });
 
-    // CLEAR RESULT FIRST
-    resultDiv.innerHTML = "";
-
-    // ===============================
-    // HANDLE STORY ONLY
-    
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "result.txt";
+  a.click();
+}
