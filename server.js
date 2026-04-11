@@ -3,24 +3,97 @@ import cors from "cors";
 import fetch from "node-fetch";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const API_KEY = process.env.OPENROUTER_API_KEY;
 
-// ✅ TEXT
-app.post("/generate-text", async (req, res) => {
+console.log("KEY:", API_KEY ? "SET ✅" : "MISSING ❌");
+
+// 🔥 SMART GENERATOR
+app.post("/generate-smart", async (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt) {
+    return res.json({ output: "Enter prompt ❌" });
+  }
+
   try {
-    const { prompt } = req.body;
+    let type = "text";
 
+    const lower = prompt.toLowerCase();
+
+    // 🧠 Detect intent
+    if (
+      lower.includes("image") ||
+      lower.includes("photo") ||
+      lower.includes("picture") ||
+      lower.includes("draw") ||
+      lower.includes("dog") ||
+      lower.includes("cat") ||
+      lower.includes("anime")
+    ) {
+      type = "image";
+    }
+
+    if (lower.includes("video") || lower.includes("reel")) {
+      type = "video";
+    }
+
+    // 🖼 IMAGE (REAL WORKING API)
+    if (type === "image") {
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+      return res.json({
+        type: "image",
+        output: imageUrl
+      });
+    }
+
+    // 🎬 VIDEO (SMART TEXT FOR NOW)
+    if (type === "video") {
+      const videoPrompt = `
+Create a HIGH QUALITY viral TikTok/Reel video script for:
+"${prompt}"
+
+Include:
+- Hook
+- Scenes
+- Camera angles
+- Music suggestion
+- Hashtags
+      `;
+
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-3-8b-instruct",
+          messages: [{ role: "user", content: videoPrompt }]
+        })
+      });
+
+      const data = await response.json();
+
+      return res.json({
+        type: "video",
+        output: data.choices?.[0]?.message?.content || "No video generated"
+      });
+    }
+
+    // 🧠 TEXT / STORIES
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
+        model: "meta-llama/llama-3-8b-instruct",
         messages: [{ role: "user", content: prompt }]
       })
     });
@@ -28,78 +101,18 @@ app.post("/generate-text", async (req, res) => {
     const data = await response.json();
 
     res.json({
-      result: data.choices?.[0]?.message?.content || "No response"
+      type: "text",
+      output: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
-    res.json({ result: "Server error ❌" });
+    console.error(err);
+    res.json({ output: "Server error ❌" });
   }
 });
 
-// ✅ IMAGE
-app.post("/generate-image", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    const response = await fetch("https://openrouter.ai/api/v1/images/generations", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/dall-e-3",
-        prompt,
-        size: "1024x1024"
-      })
-    });
-
-    const data = await response.json();
-
-    res.json({
-      image: data.data?.[0]?.url
-    });
-
-  } catch (err) {
-    res.json({ result: "Image error ❌" });
-  }
-});
-
-// ✅ VIDEO IDEAS
-app.post("/generate-video", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
-        messages: [
-          {
-            role: "user",
-            content: `Create a viral TikTok/Reels video idea for: ${prompt}`
-          }
-        ]
-      })
-    });
-
-    const data = await response.json();
-
-    res.json({
-      result: data.choices?.[0]?.message?.content
-    });
-
-  } catch (err) {
-    res.json({ result: "Video error ❌" });
-  }
-});
-
+// START
 const PORT = process.env.PORT || 10000;
-
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Running on ${PORT}`);
 });
