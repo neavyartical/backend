@@ -1,15 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>ReelMind AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
 <h1>ReelMind AI 🚀</h1>
 
-<input id="prompt" placeholder="Enter idea" />
-<button onclick="generate('story')">Generate</button>
+<input id="prompt" type="text" placeholder="Enter your idea" />
+<br><br>
 
+<button onclick="generate('story')">Story</button>
+<button onclick="generate('image')">Image</button>
+<button onclick="generate('video')">Video</button>
+
+<h3>Result:</h3>
 <div id="result"></div>
 
 <script>
@@ -18,22 +25,27 @@ async function generate(type) {
   const result = document.getElementById("result");
 
   if (!prompt) {
-    result.innerHTML = "❌ Enter something";
+    result.innerHTML = "❌ Please enter something";
     return;
   }
 
-  result.innerHTML = "⏳ Loading...";
+  result.innerHTML = "⏳ Generating...";
 
-  const res = await fetch("/generate", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ prompt, type })
-  });
+  try {
+    const response = await fetch("/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ prompt: prompt, type: type })
+    });
 
-  const data = await res.json();
-  result.innerHTML = data.result;
+    const data = await response.json();
+    result.innerHTML = data.result;
+
+  } catch (error) {
+    result.innerHTML = "❌ Error connecting to server";
+  }
 }
 </script>
 
