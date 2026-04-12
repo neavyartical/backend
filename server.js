@@ -7,7 +7,7 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Define public folder
+// ✅ Public folder
 const publicPath = path.join(__dirname, "public");
 
 // ✅ Serve frontend files
@@ -44,12 +44,12 @@ app.post("/generate", (req, res) => {
     });
   }
 
-  res.json({
+  return res.json({
     result: `✨ AI Result: ${prompt}`
   });
 });
 
-// ✅ FORCE frontend to always load
+// ✅ Always load frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
