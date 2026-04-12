@@ -1,1 +1,114 @@
+/* RESET */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* BODY */
+body {
+  background: linear-gradient(135deg, #0f172a, #020617);
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+/* APP CONTAINER */
+.app {
+  width: 95%;
+  max-width: 500px;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+  text-align: center;
+}
+
+/* LOGO */
+.logo h1 {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.logo span {
+  color: #00f0ff;
+}
+
+.powered {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-bottom: 15px;
+}
+
+/* INPUT */
+textarea {
+  width: 100%;
+  height: 100px;
+  border-radius: 12px;
+  border: none;
+  padding: 10px;
+  margin-bottom: 15px;
+  resize: none;
+  outline: none;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+/* BUTTON */
+button {
+  border: none;
+  padding: 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  margin: 5px;
+  font-weight: bold;
+}
+
+/* GENERATE BUTTON */
+#generateBtn {
+  width: 100%;
+  background: linear-gradient(45deg, #00f0ff, #8b5cf6);
+  color: #000;
+  margin-bottom: 10px;
+}
+
+/* GRID */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+/* GRID BUTTONS */
+.grid button {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+/* RESULT */
+#result {
+  margin-top: 15px;
+  min-height: 100px;
+  text-align: left;
+  font-size: 14px;
+}
+
+/* IMAGE */
+#result img {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+/* DOWNLOAD */
+#downloadBtn {
+  width: 100%;
+  margin-top: 10px;
+  background: #22c55e;
+  color: #000;
+}
 
