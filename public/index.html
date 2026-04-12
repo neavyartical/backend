@@ -2,52 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ReelMind AI</title>
 </head>
 <body>
 
-  <h1>ReelMind AI 🚀</h1>
+<h1>ReelMind AI 🚀</h1>
 
-  <input id="prompt" type="text" placeholder="Enter your idea">
-  <br><br>
+<input id="prompt" type="text" placeholder="Enter idea">
+<br><br>
 
-  <button onclick="generate('story')">Story</button>
-  <button onclick="generate('image')">Image</button>
-  <button onclick="generate('video')">Video</button>
+<button onclick="generate('story')">Story</button>
+<button onclick="generate('image')">Image</button>
+<button onclick="generate('video')">Video</button>
 
-  <h3>Result:</h3>
-  <div id="result"></div>
+<div id="result"></div>
 
-  <script>
-    async function generate(type) {
-      const prompt = document.getElementById("prompt").value;
-      const result = document.getElementById("result");
+<script>
+async function generate(type) {
+  const prompt = document.getElementById("prompt").value;
+  const result = document.getElementById("result");
 
-      if (!prompt) {
-        result.textContent = "❌ Please enter something";
-        return;
-      }
+  if (!prompt) {
+    result.textContent = "❌ Enter something";
+    return;
+  }
 
-      result.textContent = "⏳ Generating...";
+  result.textContent = "⏳ Generating...";
 
-      try {
-        const response = await fetch("/generate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ prompt: prompt, type: type })
-        });
+  try {
+    const res = await fetch("/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ prompt, type })
+    });
 
-        const data = await response.json();
-        result.textContent = data.result;
+    const data = await res.json();
+    result.textContent = data.result;
 
-      } catch (error) {
-        result.textContent = "❌ Error connecting to server";
-      }
-    }
-  </script>
+  } catch (err) {
+    result.textContent = "❌ Server error";
+  }
+}
+</script>
 
 </body>
 </html>
