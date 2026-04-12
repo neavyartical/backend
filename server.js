@@ -7,7 +7,7 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Public folder (ONLY ONE — FIXED)
+// ✅ Public folder (ONLY ONE — CLEAN)
 const publicPath = path.resolve(__dirname, "public");
 
 // ✅ Serve frontend files
@@ -49,7 +49,7 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ FORCE FRONTEND (ONLY THIS — NO ROOT DUPLICATE)
+// ✅ FORCE FRONTEND (ONLY ROUTE — NO ROOT, NO DUPLICATES)
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
