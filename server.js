@@ -63,7 +63,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// 🔒 AUTH
+// 🔒 AUTH MIDDLEWARE
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -139,7 +139,7 @@ app.get("/projects", auth, async (req, res) => {
   res.json(projects);
 });
 
-// ROOT (IMPORTANT)
+// ROOT (IMPORTANT FOR RENDER)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
