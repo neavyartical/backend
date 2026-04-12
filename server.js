@@ -2,7 +2,7 @@ const express = require("express");
 
 const app = express();
 
-// 🔥 MEMORY STORAGE (simple version)
+// 🔥 MEMORY STORAGE
 let conversation = [];
 
 app.use(express.json());
@@ -51,7 +51,7 @@ app.post("/generate", async (req, res) => {
 
     const reply = data?.choices?.[0]?.message?.content || "No response.";
 
-    // add AI reply to memory
+    // save AI reply
     conversation.push({ role: "assistant", content: reply });
 
     return res.json({ result: reply });
@@ -64,7 +64,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// 🔥 RESET MEMORY (NEW FEATURE)
+// 🔥 RESET MEMORY
 app.post("/reset", (req, res) => {
   conversation = [];
   res.json({ result: "Memory cleared." });
