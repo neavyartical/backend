@@ -13,7 +13,7 @@ app.use(cors());
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 // ENV
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
@@ -26,8 +26,7 @@ mongoose.connect(MONGO_URI)
 // MODELS
 const User = mongoose.model("User", {
   email: String,
-  password: String,
-  plan: { type: String, default: "free" }
+  password: String
 });
 
 const Project = mongoose.model("Project", {
@@ -62,8 +61,8 @@ app.post("/register", async (req, res) => {
 // LOGIN
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = await User.findOne({ email });
 
+  const user = await User.findOne({ email });
   if (!user) return res.json({ msg: "User not found" });
 
   const valid = await bcrypt.compare(password, user.password);
@@ -97,7 +96,8 @@ app.post("/generate", async (req, res) => {
       result: data?.choices?.[0]?.message?.content || "No response"
     });
 
-  } catch {
+  } catch (err) {
+    console.log(err);
     res.json({ result: "AI error" });
   }
 });
@@ -128,16 +128,13 @@ app.post("/image", async (req, res) => {
   }
 });
 
-// VIDEO (placeholder but working)
+// VIDEO (simple working version)
 app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
-
-  res.json({
-    edit: "Video edited: " + prompt
-  });
+  res.json({ edit: "Video edited: " + prompt });
 });
 
-// SAVE
+// SAVE PROJECT
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -157,7 +154,7 @@ app.get("/admin", async (req, res) => {
   res.json({ users, projects });
 });
 
-// STRIPE
+// STRIPE PAYMENT
 app.post("/pay", async (req, res) => {
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
@@ -182,8 +179,11 @@ app.get("/ads.txt", (req, res) => {
   res.send("google.com, pub-xxxxxxxxxxxx, DIRECT, f08c47fec0942fa0");
 });
 
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-app.listen(10000, () => console.log("🔥 Server running"));
+// PORT
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log("🔥 Running on " + PORT));
