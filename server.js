@@ -10,15 +10,15 @@ app.use(express.json());
 // ✅ Define public folder
 const publicPath = path.join(__dirname, "public");
 
-// ✅ Serve static files (HTML, CSS, JS)
+// ✅ Serve frontend files (VERY IMPORTANT)
 app.use(express.static(publicPath));
 
-// ✅ API route (test)
+// ✅ Test API route
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ AI route (connects to your frontend buttons)
+// ✅ AI route (connects to frontend buttons)
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
@@ -44,12 +44,12 @@ app.post("/generate", (req, res) => {
     });
   }
 
-  res.json({
+  return res.json({
     result: `✨ AI Result: ${prompt}`
   });
 });
 
-// ✅ ALWAYS serve frontend (VERY IMPORTANT)
+// ✅ ALWAYS load frontend (fixes "Not Found")
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
