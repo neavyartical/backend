@@ -3,10 +3,10 @@ const path = require("path");
 
 const app = express();
 
-// Serve frontend
+// Serve frontend files
 app.use(express.static("public"));
 
-// Always load index.html
+// Load index page
 app.get("/", (req, res) => {
   res.sendFile(path.resolve("public/index.html"));
 });
