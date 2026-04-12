@@ -61,7 +61,6 @@ app.post("/login", async (req, res) => {
   if (!valid) return res.json({ msg: "Wrong password" });
 
   const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
   return res.json({ token });
 });
 
@@ -83,8 +82,7 @@ app.post("/generate", async (req, res) => {
         messages: [
           {
             role: "system",
-            content:
-              "You are ReelMind AI created by Artical Neavy. Answer like ChatGPT + Google + Wikipedia."
+            content: "You are ReelMind AI created by Artical Neavy. Answer like ChatGPT + Google + Wikipedia."
           },
           { role: "user", content: prompt }
         ]
@@ -150,9 +148,7 @@ app.post("/pay", async (req, res) => {
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: {
-            name: "ReelMind Premium"
-          },
+          product_data: { name: "ReelMind Premium" },
           unit_amount: 500
         },
         quantity: 1
@@ -220,6 +216,7 @@ app.get("/", (req, res) => {
 
 // ================= PORT =================
 const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
   console.log("🔥 Server running on port " + PORT);
 });
