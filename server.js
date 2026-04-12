@@ -7,10 +7,10 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Public folder (ONLY ONE — CLEAN)
+// ✅ Public folder (correct path)
 const publicPath = path.resolve(__dirname, "public");
 
-// ✅ Serve frontend files
+// ✅ Serve frontend files (HTML, CSS, JS)
 app.use(express.static(publicPath));
 
 // ✅ API test route
@@ -49,12 +49,12 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ FORCE FRONTEND (ONLY ROUTE — NO ROOT, NO DUPLICATES)
+// ✅ FORCE FRONTEND (THIS FIXES "Not Found")
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// ✅ Start server (THIS WAS MISSING IN YOUR SCREENSHOT ❗)
+// ✅ Start server
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
