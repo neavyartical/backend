@@ -1,25 +1,24 @@
-
 const express = require("express");
 const path = require("path");
 require("dotenv").config();
 
 const app = express();
 
-// ✅ Middleware
+// Middleware
 app.use(express.json());
 
-// ✅ Absolute path to public folder (CRITICAL)
+// Public folder
 const publicPath = path.join(__dirname, "public");
 
-// ✅ Serve frontend files
+// Serve frontend
 app.use(express.static(publicPath));
 
-// ✅ API test route
+// API test
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ AI route
+// AI route
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
@@ -50,17 +49,12 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ ROOT route (VERY IMPORTANT — THIS FIXES "Not Found")
-app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
-});
-
-// ✅ Catch-all route (for SPA / safety)
+// FORCE frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
