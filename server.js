@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-// ✅ FIX FETCH (important for Render)
+// ✅ FIX FETCH (important for Render / Node <18)
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 
 const app = express();
@@ -66,7 +66,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// 🔒 AUTH
+// 🔒 AUTH MIDDLEWARE
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -142,12 +142,12 @@ app.get("/projects", auth, async (req, res) => {
   res.json(projects);
 });
 
-// ROOT
+// ROOT (IMPORTANT FOR RENDER)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT (FIXED FINAL)
+// PORT (FINAL FIX)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
