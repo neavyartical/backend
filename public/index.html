@@ -1,24 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>ReelMind AI</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body>
-
-<h1>ReelMind AI 🚀</h1>
-
-<input id="prompt" type="text" placeholder="Enter your idea">
-<br><br>
-
-<button onclick="generate('story')">Story</button>
-<button onclick="generate('image')">Image</button>
-<button onclick="generate('video')">Video</button>
-
-<h3>Result:</h3>
-<div id="result"></div>
-
 <script>
 async function generate(type) {
   const prompt = document.getElementById("prompt").value;
@@ -48,6 +27,3 @@ async function generate(type) {
   }
 }
 </script>
-
-</body>
-</html>
