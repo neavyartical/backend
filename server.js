@@ -3,17 +3,22 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// ✅ fetch fix (Render safe)
+const fetch = (...args) =>
+  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+
 const app = express();
 app.use(express.json());
 
 // 🔐 ENV
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// 🔥 CONNECT DB
+// 🔥 DB CONNECT
 mongoose.connect(MONGO_URI)
-  .then(() => console.log("DB Connected"))
-  .catch(err => console.log(err));
+  .then(() => console.log("✅ DB Connected"))
+  .catch(err => console.log("❌ DB Error:", err));
 
 // 🌐 CORS
 app.use((req, res, next) => {
@@ -23,20 +28,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// 👤 USER MODEL
+// ================= MODELS =================
+
 const User = mongoose.model("User", {
   email: String,
-  password: String
+  password: String,
+  plan: { type: String, default: "free" } // monetization ready
 });
 
-// 💾 PROJECT MODEL
 const Project = mongoose.model("Project", {
   userId: String,
   content: String,
-  type: String
+  type: String,
+  createdAt: { type: Date, default: Date.now }
 });
 
-// 🔐 REGISTER
+// ================= AUTH =================
+
+// REGISTER
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
@@ -46,7 +55,7 @@ app.post("/register", async (req, res) => {
   res.json({ msg: "Registered" });
 });
 
-// 🔐 LOGIN
+// LOGIN
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -60,7 +69,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// 🔒 AUTH MIDDLEWARE
+// AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -70,11 +79,13 @@ function auth(req, res, next) {
     req.userId = decoded.id;
     next();
   } catch {
-    return res.status(401).send("Invalid token");
+    res.status(401).send("Invalid token");
   }
 }
 
-// 🧠 AI TEXT
+// ================= AI CORE =================
+
+// 🧠 TEXT AI (FAST + SMART)
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
@@ -84,12 +95,19 @@ app.post("/generate", async (req, res) => {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are ReelMind AI created by Artical Neavy. You answer like ChatGPT + Google + Wikipedia combined. Be smart, fast, and helpful."
+          },
+          { role: "user", content: prompt }
+        ]
       })
     });
 
@@ -101,21 +119,51 @@ app.post("/generate", async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.json({ result: "Error generating AI response." });
+    res.json({ result: "AI error" });
   }
 });
 
-// 🎬 VIDEO API
-app.post("/video", (req, res) => {
+// 🎨 IMAGE GENERATION (REAL)
+app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
+  try {
+    const response = await fetch("https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`
+      },
+      body: JSON.stringify({ inputs: prompt })
+    });
+
+    const buffer = await response.arrayBuffer();
+    const base64 = Buffer.from(buffer).toString("base64");
+
+    res.json({
+      image: `data:image/png;base64,${base64}`,
+      watermark: "ReelMind AI • Artical Neavy"
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.json({ error: "Image generation failed" });
+  }
+});
+
+// 🎬 VIDEO (READY FOR RUNWAY)
+app.post("/video", async (req, res) => {
+  const { prompt } = req.body;
+
+  // 🔥 replace later with runway API
   res.json({
     video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-    idea: prompt
+    note: "Connect Runway here"
   });
 });
 
-// 💾 SAVE PROJECT
+// ================= STORAGE =================
+
+// SAVE PROJECT
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -128,20 +176,24 @@ app.post("/save", auth, async (req, res) => {
   res.json({ msg: "Saved" });
 });
 
-// 📂 LOAD PROJECTS
+// LOAD PROJECTS
 app.get("/projects", auth, async (req, res) => {
   const projects = await Project.find({ userId: req.userId });
   res.json(projects);
 });
 
-// ROOT (IMPORTANT FOR RENDER)
+// ================= SYSTEM =================
+
+// TERMS (for AdSense approval)
+app.get("/terms", (req, res) => {
+  res.send("Terms and Conditions - ReelMind AI by Artical Neavy");
+});
+
+// ROOT (IMPORTANT)
 app.get("/", (req, res) => {
-  res.send("Backend running 🚀");
+  res.send("🚀 ReelMind AI Backend Running");
 });
 
-// ✅ PORT FIX
+// PORT
 const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+app.listen(PORT, () => console.log("✅ Running on " + PORT));
