@@ -1,83 +1,133 @@
 const express = require("express");
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const app = express();
-
-// 🔥 MEMORY STORAGE
-let conversation = [];
-
 app.use(express.json());
 
-// CORS (allow frontend)
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST");
-  next();
+// 🔐 ENV (set these on Render)
+const JWT_SECRET = process.env.JWT_SECRET || "secret123";
+const MONGO_URI = process.env.MONGO_URI;
+
+// 🔥 CONNECT DB
+mongoose.connect(MONGO_URI)
+.then(()=>console.log("DB Connected"))
+.catch(err=>console.log(err));
+
+// 👤 USER MODEL
+const User = mongoose.model("User", {
+  email: String,
+  password: String
 });
 
-// 🔥 AI ROUTE WITH MEMORY
-app.post("/generate", async (req, res) => {
-  const { prompt } = req.body;
+// 💾 PROJECT MODEL
+const Project = mongoose.model("Project", {
+  userId: String,
+  content: String,
+  type: String
+});
 
-  if (!prompt) {
-    return res.json({ result: "Enter something." });
-  }
+// 🔐 REGISTER
+app.post("/register", async (req,res)=>{
+  const { email, password } = req.body;
 
-  // add user message
-  conversation.push({ role: "user", content: prompt });
+  const hashed = await bcrypt.hash(password, 10);
 
-  // keep only last 10 messages
-  if (conversation.length > 10) {
-    conversation.shift();
-  }
+  const user = new User({ email, password: hashed });
+  await user.save();
+
+  res.json({ msg:"Registered" });
+});
+
+// 🔐 LOGIN
+app.post("/login", async (req,res)=>{
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email });
+  if(!user) return res.json({ msg:"No user" });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if(!valid) return res.json({ msg:"Wrong password" });
+
+  const token = jwt.sign({ id:user._id }, JWT_SECRET);
+
+  res.json({ token });
+});
+
+// 🔒 AUTH MIDDLEWARE
+function auth(req,res,next){
+  const token = req.headers.authorization;
+  if(!token) return res.status(401).send("No token");
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are ReelMind AI. Create viral, engaging content." },
-          ...conversation
-        ]
-      })
-    });
-
-    const data = await response.json();
-
-    const reply = data?.choices?.[0]?.message?.content || "No response.";
-
-    // save AI reply
-    conversation.push({ role: "assistant", content: reply });
-
-    return res.json({ result: reply });
-
-  } catch (error) {
-    console.error(error);
-    return res.json({
-      result: "Error generating AI response."
-    });
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch {
+    res.status(401).send("Invalid token");
   }
+}
+
+// 🧠 AI TEXT (ONE API)
+app.post("/generate", async (req,res)=>{
+  const { prompt } = req.body;
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method:"POST",
+    headers:{
+      "Authorization":`Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type":"application/json"
+    },
+    body: JSON.stringify({
+      model:"openai/gpt-4o-mini",
+      messages:[{role:"user",content:prompt}]
+    })
+  });
+
+  const data = await response.json();
+
+  res.json({
+    result: data.choices?.[0]?.message?.content || "No response"
+  });
 });
 
-// 🔥 RESET MEMORY
-app.post("/reset", (req, res) => {
-  conversation = [];
-  res.json({ result: "Memory cleared." });
+// 🎬 AI VIDEO (SIMPLE API)
+app.post("/video", (req,res)=>{
+  const { prompt } = req.body;
+
+  // placeholder video generator
+  res.json({
+    video:`https://samplelib.com/lib/preview/mp4/sample-5s.mp4`,
+    idea: prompt
+  });
 });
 
-// ROOT (Render health)
-app.get("/", (req, res) => {
+// 💾 SAVE PROJECT
+app.post("/save", auth, async (req,res)=>{
+  const { content, type } = req.body;
+
+  const project = new Project({
+    userId: req.userId,
+    content,
+    type
+  });
+
+  await project.save();
+
+  res.json({ msg:"Saved" });
+});
+
+// 📂 LOAD PROJECTS
+app.get("/projects", auth, async (req,res)=>{
+  const projects = await Project.find({ userId:req.userId });
+  res.json(projects);
+});
+
+// ROOT
+app.get("/", (req,res)=>{
   res.send("Backend running 🚀");
 });
 
-// PORT
 const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
+app.listen(PORT, ()=>console.log("Running on "+PORT));
