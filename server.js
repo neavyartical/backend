@@ -51,12 +51,12 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// ROOT (Render health)
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT
+// PORT (FIXED)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
