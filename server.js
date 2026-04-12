@@ -10,12 +10,12 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🔥 CONNECT DB
+// 🔥 CONNECT DB (CLEAN)
 mongoose.connect(MONGO_URI)
-.then(() => console.log("DB Connected"))
-.catch(err => console.log(err));
+  .then(() => console.log("DB Connected"))
+  .catch(err => console.log(err));
 
-// 🌐 CORS (FIXED)
+// 🌐 CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -63,7 +63,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// 🔒 AUTH MIDDLEWARE (FIXED)
+// 🔒 AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -77,7 +77,7 @@ function auth(req, res, next) {
   }
 }
 
-// 🧠 AI TEXT (ONE CLEAN ROUTE)
+// 🧠 AI TEXT (FINAL CLEAN)
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
@@ -139,12 +139,12 @@ app.get("/projects", auth, async (req, res) => {
   res.json(projects);
 });
 
-// ROOT (IMPORTANT FOR RENDER)
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT (FINAL FIX)
+// PORT
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
