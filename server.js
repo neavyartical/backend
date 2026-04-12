@@ -1,53 +1,66 @@
-const express = require("express");
-const path = require("path");
-
-const app = express();
-
-// Middleware
-app.use(express.json());
-
-// Serve frontend
-app.use(express.static("public"));
-
-// API (for your buttons)
-app.post("/generate", (req, res) => {
-  const { prompt, type } = req.body;
+// MAIN GENERATE FUNCTION
+function generate(type) {
+  const prompt = document.getElementById("prompt").value;
+  const result = document.getElementById("result");
 
   if (!prompt) {
-    return res.json({ result: "❌ Enter something first" });
+    result.innerHTML = "<p style='color:red;'>❌ Please enter something first</p>";
+    return;
   }
 
-  if (type === "image") {
-    return res.json({
-      result: "https://picsum.photos/400/300"
-    });
+  // 🔄 Loading effect
+  result.innerHTML = "<p>⏳ Generating...</p>";
+
+  setTimeout(() => {
+    if (type === "story") {
+      result.innerHTML = `
+        <h3>📖 Story</h3>
+        <p>Once upon a time, ${prompt} turned into something amazing. This idea went viral and shocked everyone...</p>
+      `;
+    }
+
+    else if (type === "image") {
+      result.innerHTML = `
+        <h3>🖼 Image</h3>
+        <img src="https://picsum.photos/400/300" alt="Generated Image">
+      `;
+    }
+
+    else if (type === "video") {
+      result.innerHTML = `
+        <h3>🎬 Video Idea</h3>
+        <p>Create a viral video about "${prompt}" with dramatic music, fast cuts, and trending captions.</p>
+      `;
+    }
+
+    else {
+      result.innerHTML = `
+        <h3>✨ AI Result</h3>
+        <p>Here’s a powerful idea based on your input: "${prompt}" — this could easily go viral on TikTok and Reels.</p>
+      `;
+    }
+  }, 1500);
+}
+
+// ASK AI BUTTON
+function askAI() {
+  const result = document.getElementById("result");
+  result.innerHTML = "<p>🌍 AI assistant coming soon... stay tuned 🚀</p>";
+}
+
+// DOWNLOAD RESULT
+function downloadResult() {
+  const text = document.getElementById("result").innerText;
+
+  if (!text) {
+    alert("Nothing to download!");
+    return;
   }
 
-  if (type === "story") {
-    return res.json({
-      result: `📖 Story: ${prompt} turned into something viral...`
-    });
-  }
+  const blob = new Blob([text], { type: "text/plain" });
 
-  if (type === "video") {
-    return res.json({
-      result: `🎬 Video idea: Make a viral reel about "${prompt}".`
-    });
-  }
-
-  res.json({
-    result: `✨ AI Result: ${prompt}`
-  });
-});
-
-// Always load frontend
-app.get("*", (req, res) => {
-  res.sendFile(path.resolve("public/index.html"));
-});
-
-// Start server
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("🚀 Server running...");
-});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "reelmind-result.txt";
+  link.click();
+}
