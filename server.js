@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const Stripe = require("stripe");
 
-// FETCH FIX
+// FETCH FIX (Render safe)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
@@ -44,27 +44,31 @@ const Project = mongoose.model("Project", {
 // ================= AUTH =================
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
+
   const hashed = await bcrypt.hash(password, 10);
   await new User({ email, password: hashed }).save();
+
   return res.json({ msg: "Registered" });
 });
 
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = await User.findOne({ email });
 
+  const user = await User.findOne({ email });
   if (!user) return res.json({ msg: "User not found" });
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.json({ msg: "Wrong password" });
 
   const token = jwt.sign({ id: user._id }, JWT_SECRET);
+
   return res.json({ token });
 });
 
 // ================= AI TEXT =================
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
+
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
@@ -80,7 +84,7 @@ app.post("/generate", async (req, res) => {
           {
             role: "system",
             content:
-              "You are ReelMind AI created by Artical Neavy. You answer like ChatGPT + Google + Wikipedia."
+              "You are ReelMind AI created by Artical Neavy. Answer like ChatGPT + Google + Wikipedia."
           },
           { role: "user", content: prompt }
         ]
@@ -133,7 +137,6 @@ app.post("/image", async (req, res) => {
 app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
 
-  // 🔥 Replace with Runway API tomorrow
   return res.json({
     edit: `AI video edited based on: ${prompt}`
   });
@@ -147,14 +150,16 @@ app.post("/pay", async (req, res) => {
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: { name: "ReelMind Premium" },
+          product_data: {
+            name: "ReelMind Premium"
+          },
           unit_amount: 500
         },
         quantity: 1
       }],
       mode: "payment",
-      success_url: "https://your-site.com/success",
-      cancel_url: "https://your-site.com/cancel"
+      success_url: "https://reelmindbackend-1.onrender.com/success",
+      cancel_url: "https://reelmindbackend-1.onrender.com/cancel"
     });
 
     return res.json({ url: session.url });
@@ -165,6 +170,15 @@ app.post("/pay", async (req, res) => {
   }
 });
 
+// ================= SUCCESS / CANCEL =================
+app.get("/success", (req, res) => {
+  res.send("<h1>✅ Payment Successful 🚀</h1><p>Welcome to Premium</p>");
+});
+
+app.get("/cancel", (req, res) => {
+  res.send("<h1>❌ Payment Cancelled</h1>");
+});
+
 // ================= ADMIN =================
 app.get("/admin", async (req, res) => {
   const users = await User.countDocuments();
@@ -173,7 +187,7 @@ app.get("/admin", async (req, res) => {
   return res.json({
     users,
     projects,
-    note: "Revenue tracked via Stripe dashboard"
+    note: "Check Stripe dashboard for money 💰"
   });
 });
 
@@ -183,41 +197,20 @@ app.get("/ads.txt", (req, res) => {
 });
 
 // ================= REQUIRED PAGES =================
-
-// 🔐 PRIVACY
 app.get("/privacy", (req, res) => {
-  res.send(`
-    <h1>Privacy Policy</h1>
-    <p>We respect your privacy. No data is sold.</p>
-    <p>ReelMind AI by Artical Neavy</p>
-  `);
+  res.send("<h1>Privacy Policy</h1><p>Your data is safe.</p>");
 });
 
-// ℹ️ ABOUT
 app.get("/about", (req, res) => {
-  res.send(`
-    <h1>About ReelMind AI</h1>
-    <p>Built by Artical Neavy.</p>
-    <p>AI for text, image, and video creation.</p>
-  `);
+  res.send("<h1>About</h1><p>ReelMind AI by Artical Neavy</p>");
 });
 
-// 📞 CONTACT
 app.get("/contact", (req, res) => {
-  res.send(`
-    <h1>Contact</h1>
-    <p>Email: support@reelmind.ai</p>
-  `);
+  res.send("<h1>Contact</h1><p>Email: support@reelmind.ai</p>");
 });
 
-// 📰 BLOG (IMPORTANT FOR ADSENSE)
 app.get("/blog", (req, res) => {
-  res.send(`
-    <h1>ReelMind AI Blog</h1>
-    <p>How AI is changing content creation</p>
-    <p>Best tools for viral videos</p>
-    <p>AI vs human creativity</p>
-  `);
+  res.send("<h1>Blog</h1><p>AI content coming soon...</p>");
 });
 
 // ================= ROOT =================
