@@ -6,11 +6,11 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const Stripe = require("stripe");
 
-// FETCH FIX (Render safe)
+// FETCH (Render safe)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// ================= APP =================
+// ================= INIT =================
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -20,7 +20,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
-const stripe = new Stripe(process.env.STRIPE_SECRET);
+const STRIPE_SECRET = process.env.STRIPE_SECRET;
+
+const stripe = new Stripe(STRIPE_SECRET);
 
 // ================= DB =================
 mongoose.connect(MONGO_URI)
@@ -44,8 +46,8 @@ const Project = mongoose.model("Project", {
 // ================= AUTH =================
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
-
   const hashed = await bcrypt.hash(password, 10);
+
   await new User({ email, password: hashed }).save();
 
   return res.json({ msg: "Registered" });
@@ -64,11 +66,22 @@ app.post("/login", async (req, res) => {
   return res.json({ token });
 });
 
+function auth(req, res, next) {
+  const token = req.headers.authorization;
+  if (!token) return res.status(401).send("No token");
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch {
+    return res.status(401).send("Invalid token");
+  }
+}
+
 // ================= AI TEXT =================
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
-
-  if (!prompt) return res.json({ result: "Enter something." });
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -125,18 +138,17 @@ app.post("/image", async (req, res) => {
       watermark: "ReelMind AI • Artical Neavy"
     });
 
-  } catch (err) {
-    console.log(err);
+  } catch {
     return res.json({ error: "Image failed" });
   }
 });
 
-// ================= VIDEO EDIT =================
+// ================= VIDEO =================
 app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
 
   return res.json({
-    edit: `AI video edited based on: ${prompt}`
+    edit: "Video edited: " + prompt
   });
 });
 
@@ -166,9 +178,9 @@ app.post("/pay", async (req, res) => {
   }
 });
 
-// ================= SUCCESS / CANCEL =================
+// SUCCESS / CANCEL
 app.get("/success", (req, res) => {
-  res.send("<h1>✅ Payment Successful 🚀</h1><p>Welcome to Premium</p>");
+  res.send("<h1>✅ Payment Successful 🚀</h1>");
 });
 
 app.get("/cancel", (req, res) => {
@@ -187,11 +199,6 @@ app.get("/admin", async (req, res) => {
   });
 });
 
-// ================= ADSENSE =================
-app.get("/ads.txt", (req, res) => {
-  res.send("google.com, pub-1714638410489429, DIRECT, f08c47fec0942fa0");
-});
-
 // ================= REQUIRED PAGES =================
 app.get("/privacy", (req, res) => {
   res.send("<h1>Privacy Policy</h1><p>Your data is safe.</p>");
@@ -206,7 +213,12 @@ app.get("/contact", (req, res) => {
 });
 
 app.get("/blog", (req, res) => {
-  res.send("<h1>Blog</h1><p>AI content coming soon...</p>");
+  res.send("<h1>Blog</h1><p>AI content coming soon</p>");
+});
+
+// ================= ADS =================
+app.get("/ads.txt", (req, res) => {
+  res.send("google.com, pub-1714638410489429, DIRECT, f08c47fec0942fa0");
 });
 
 // ================= ROOT =================
@@ -214,7 +226,7 @@ app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend Running");
 });
 
-// ================= PORT =================
+// ================= START =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
