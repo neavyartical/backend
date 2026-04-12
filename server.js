@@ -49,7 +49,12 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// FORCE frontend
+// Root route
+app.get("/", (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
+});
+
+// Catch-all
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
