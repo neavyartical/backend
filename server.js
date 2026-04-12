@@ -10,7 +10,7 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🔥 CONNECT DB (FIXED)
+// 🔥 CONNECT DB
 mongoose.connect(MONGO_URI)
   .then(() => console.log("DB Connected"))
   .catch(err => console.log(err));
@@ -74,7 +74,7 @@ function auth(req, res, next) {
   }
 }
 
-// 🧠 AI TEXT (uses built-in fetch)
+// 🧠 AI TEXT
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
@@ -107,8 +107,11 @@ app.post("/generate", async (req, res) => {
 
 // 🎬 VIDEO API
 app.post("/video", (req, res) => {
+  const { prompt } = req.body;
+
   res.json({
-    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4"
+    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+    idea: prompt
   });
 });
 
