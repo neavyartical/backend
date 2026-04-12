@@ -18,7 +18,7 @@ const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
 
-// 🔥 DB CONNECT
+// 🔥 DB
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
   .catch(err => console.log("❌ DB Error:", err));
@@ -70,7 +70,6 @@ app.post("/login", async (req, res) => {
   return res.json({ token });
 });
 
-// 🔒 AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -84,59 +83,7 @@ function auth(req, res, next) {
   }
 }
 
-// ================= SOCIAL =================
-
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-app.post("/auth/google", async (req, res) => {
-  const { token } = req.body;
-
-  try {
-    const ticket = await googleClient.verifyIdToken({
-      idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID
-    });
-
-    const email = ticket.getPayload().email;
-
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = await new User({ email, password: "google_auth" }).save();
-    }
-
-    const jwtToken = jwt.sign({ id: user._id }, JWT_SECRET);
-    return res.json({ token: jwtToken });
-
-  } catch {
-    return res.status(401).json({ error: "Google login failed" });
-  }
-});
-
-app.post("/auth/facebook", async (req, res) => {
-  const { email } = req.body;
-
-  let user = await User.findOne({ email });
-  if (!user) {
-    user = await new User({ email, password: "facebook_auth" }).save();
-  }
-
-  const token = jwt.sign({ id: user._id }, JWT_SECRET);
-  return res.json({ token });
-});
-
-app.post("/auth/apple", async (req, res) => {
-  const { email } = req.body;
-
-  let user = await User.findOne({ email });
-  if (!user) {
-    user = await new User({ email, password: "apple_auth" }).save();
-  }
-
-  const token = jwt.sign({ id: user._id }, JWT_SECRET);
-  return res.json({ token });
-});
-
-// ================= AI =================
+// ================= AI (SMART MULTI-LANGUAGE) =================
 
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
@@ -151,7 +98,13 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
+        messages: [
+          {
+            role: "system",
+            content: "You are ReelMind AI created by Artical Neavy. You understand ALL languages including Krio, Pidgin, French, Arabic. Answer like ChatGPT + Google + Wikipedia combined. Be fast and intelligent."
+          },
+          { role: "user", content: prompt }
+        ]
       })
     });
 
@@ -167,7 +120,18 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// 🎨 IMAGE
+// ================= 🔊 TEXT TO SPEECH =================
+
+app.post("/tts", async (req, res) => {
+  const { text } = req.body;
+
+  return res.json({
+    audio: `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text)}`
+  });
+});
+
+// ================= 🎨 IMAGE =================
+
 app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
@@ -192,22 +156,23 @@ app.post("/image", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
-    return res.json({ error: "Image generation failed" });
+    return res.json({ error: "Image failed" });
   }
 });
 
-// 🎬 VIDEO
-app.post("/video", async (req, res) => {
+// ================= 🎬 AI VIDEO EDIT =================
+
+app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
 
+  // 🔥 simulate smart editing (next: connect Runway)
   return res.json({
     video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-    idea: prompt
+    edit: `AI edited video based on: ${prompt}`
   });
 });
 
-// ================= PROJECT =================
+// ================= 💾 PROJECT =================
 
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
@@ -233,7 +198,7 @@ app.get("/ads.txt", (req, res) => {
 });
 
 app.get("/terms", (req, res) => {
-  res.send("Terms and Conditions - ReelMind AI by Artical Neavy");
+  res.send("ReelMind AI Terms - Powered by Artical Neavy");
 });
 
 app.get("/", (req, res) => {
@@ -245,5 +210,5 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Server running on port " + PORT);
+  console.log("🔥 Running on " + PORT);
 });
