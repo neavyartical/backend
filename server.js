@@ -2,8 +2,10 @@ const express = require("express");
 
 const app = express();
 
+// Middleware
 app.use(express.json());
 
+// CORS (allow frontend)
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -11,6 +13,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// 🔥 AI ROUTE
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
@@ -48,10 +51,12 @@ app.post("/generate", async (req, res) => {
   }
 });
 
+// ROOT (Render health)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
+// PORT (FINAL FIX)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
