@@ -10,7 +10,7 @@ app.use(express.json());
 // ✅ Public folder
 const publicPath = path.join(__dirname, "public");
 
-// ✅ Serve frontend (HTML, CSS, JS)
+// ✅ Serve frontend files
 app.use(express.static(publicPath));
 
 // ✅ API test route
@@ -18,7 +18,7 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ AI route (connects to your frontend)
+// ✅ AI route
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
@@ -49,7 +49,7 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ ALWAYS load frontend (THIS FIXES YOUR ISSUE)
+// ✅ FORCE frontend (CRITICAL FIX)
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
