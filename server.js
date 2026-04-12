@@ -2,10 +2,12 @@ const express = require("express");
 
 const app = express();
 
-// Middleware
+// 🔥 MEMORY STORAGE (simple version)
+let conversation = [];
+
 app.use(express.json());
 
-// CORS (allow frontend)
+// CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -13,12 +15,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// 🔥 AI ROUTE
+// 🔥 AI ROUTE WITH MEMORY
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
   if (!prompt) {
     return res.json({ result: "Enter something." });
+  }
+
+  // add user message
+  conversation.push({ role: "user", content: prompt });
+
+  // limit memory (keep last 10 messages)
+  if (conversation.length > 10) {
+    conversation.shift();
   }
 
   try {
@@ -31,17 +41,20 @@ app.post("/generate", async (req, res) => {
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
         messages: [
-          { role: "system", content: "You are a viral content creator AI." },
-          { role: "user", content: prompt }
+          { role: "system", content: "You are ReelMind AI. Create viral, engaging content." },
+          ...conversation
         ]
       })
     });
 
     const data = await response.json();
 
-    return res.json({
-      result: data?.choices?.[0]?.message?.content || "No response."
-    });
+    const reply = data?.choices?.[0]?.message?.content || "No response.";
+
+    // add AI reply to memory
+    conversation.push({ role: "assistant", content: reply });
+
+    return res.json({ result: reply });
 
   } catch (error) {
     console.error(error);
@@ -51,12 +64,18 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// ROOT (Render health)
+// 🔥 RESET MEMORY (NEW FEATURE)
+app.post("/reset", (req, res) => {
+  conversation = [];
+  res.json({ result: "Memory cleared." });
+});
+
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT (FINAL FIX)
+// PORT
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
