@@ -4,21 +4,21 @@ require("dotenv").config();
 
 const app = express();
 
-// ✅ Middleware
+// Middleware
 app.use(express.json());
 
-// ✅ Define public folder
+// Public folder
 const publicPath = path.join(__dirname, "public");
 
-// ✅ Serve frontend files (VERY IMPORTANT)
+// Serve frontend files
 app.use(express.static(publicPath));
 
-// ✅ Test API route
+// API
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
 
-// ✅ AI route (connects to frontend buttons)
+// AI route
 app.post("/generate", (req, res) => {
   const { prompt, type } = req.body;
 
@@ -27,34 +27,26 @@ app.post("/generate", (req, res) => {
   }
 
   if (type === "story") {
-    return res.json({
-      result: `📖 Story: ${prompt} turned into something viral...`
-    });
+    return res.json({ result: `📖 Story: ${prompt}` });
   }
 
   if (type === "image") {
-    return res.json({
-      result: `🖼 Image idea: ${prompt}`
-    });
+    return res.json({ result: `🖼 Image idea: ${prompt}` });
   }
 
   if (type === "video") {
-    return res.json({
-      result: `🎬 Video idea: Make a viral reel about "${prompt}".`
-    });
+    return res.json({ result: `🎬 Video idea: ${prompt}` });
   }
 
-  return res.json({
-    result: `✨ AI Result: ${prompt}`
-  });
+  res.json({ result: `✨ AI Result: ${prompt}` });
 });
 
-// ✅ ALWAYS load frontend (fixes "Not Found")
+// FORCE frontend
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
