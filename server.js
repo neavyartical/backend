@@ -7,8 +7,8 @@ const app = express();
 // ✅ Middleware
 app.use(express.json());
 
-// ✅ Public folder
-const publicPath = path.join(__dirname, "public");
+// ✅ Absolute path to public folder
+const publicPath = path.resolve(__dirname, "public");
 
 // ✅ Serve frontend files
 app.use(express.static(publicPath));
@@ -49,7 +49,7 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ FORCE frontend (CRITICAL FIX)
+// ✅ FORCE frontend (THIS IS THE FIX)
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
