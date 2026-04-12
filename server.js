@@ -3,22 +3,22 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-// ✅ FIX FETCH (only once)
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// ✅ FETCH FIX (only once, clean)
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
 const app = express();
 app.use(express.json());
 
-// 🔐 ENV
+// ENV
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🔥 CONNECT DB
+// DB CONNECT
 mongoose.connect(MONGO_URI)
   .then(() => console.log("DB Connected"))
-  .catch(err => console.log(err));
+  .catch((err) => console.log(err));
 
-// 🌐 CORS
+// CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -26,32 +26,29 @@ app.use((req, res, next) => {
   next();
 });
 
-// 👤 USER MODEL
+// MODELS
 const User = mongoose.model("User", {
   email: String,
   password: String
 });
 
-// 💾 PROJECT MODEL
 const Project = mongoose.model("Project", {
   userId: String,
   content: String,
   type: String
 });
 
-// 🔐 REGISTER
+// REGISTER
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
   const hashed = await bcrypt.hash(password, 10);
-  const user = new User({ email, password: hashed });
-
-  await user.save();
+  await new User({ email, password: hashed }).save();
 
   res.json({ msg: "Registered" });
 });
 
-// 🔐 LOGIN
+// LOGIN
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -62,11 +59,10 @@ app.post("/login", async (req, res) => {
   if (!valid) return res.json({ msg: "Wrong password" });
 
   const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
   res.json({ token });
 });
 
-// 🔒 AUTH MIDDLEWARE (clean)
+// AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -76,21 +72,20 @@ function auth(req, res, next) {
     req.userId = decoded.id;
     next();
   } catch {
-    res.status(401).send("Invalid token");
+    return res.status(401).send("Invalid token");
   }
 }
 
-// 🧠 AI TEXT
+// AI
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
-
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -101,53 +96,48 @@ app.post("/generate", async (req, res) => {
 
     const data = await response.json();
 
-    return res.json({
+    res.json({
       result: data?.choices?.[0]?.message?.content || "No response"
     });
 
-  } catch (error) {
-    console.error(error);
-    return res.json({ result: "Error generating AI response." });
+  } catch (err) {
+    console.log(err);
+    res.json({ result: "Error generating AI response." });
   }
 });
 
-// 🎬 VIDEO API
+// VIDEO
 app.post("/video", (req, res) => {
-  const { prompt } = req.body;
-
   res.json({
-    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-    idea: prompt
+    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4"
   });
 });
 
-// 💾 SAVE PROJECT
+// SAVE
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
-  const project = new Project({
+  await new Project({
     userId: req.userId,
     content,
     type
-  });
-
-  await project.save();
+  }).save();
 
   res.json({ msg: "Saved" });
 });
 
-// 📂 LOAD PROJECTS
+// LOAD
 app.get("/projects", auth, async (req, res) => {
   const projects = await Project.find({ userId: req.userId });
   res.json(projects);
 });
 
-// ROOT (IMPORTANT FOR RENDER)
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// ✅ FINAL PORT FIX
+// PORT
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
