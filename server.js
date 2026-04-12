@@ -49,7 +49,7 @@ app.post("/generate", (req, res) => {
   });
 });
 
-// ✅ Always load frontend
+// ✅ ALWAYS load frontend (VERY IMPORTANT)
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
