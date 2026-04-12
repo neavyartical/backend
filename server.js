@@ -3,16 +3,59 @@ const path = require("path");
 
 const app = express();
 
-// Serve frontend files
-app.use(express.static("public"));
+// ✅ Middleware
+app.use(express.json());
 
-// Load index page
-app.get("/", (req, res) => {
-  res.sendFile(path.resolve("public/index.html"));
+// ✅ Define public folder path
+const publicPath = path.join(__dirname, "public");
+
+// ✅ Serve static files (HTML, CSS, JS)
+app.use(express.static(publicPath));
+
+// ✅ API route (test)
+app.get("/api/health", (req, res) => {
+  res.json({ status: "OK 🚀" });
 });
 
-// Start server
+// ✅ AI route (for your buttons)
+app.post("/generate", (req, res) => {
+  const { prompt, type } = req.body;
+
+  if (!prompt) {
+    return res.json({ result: "❌ Please enter something first" });
+  }
+
+  if (type === "story") {
+    return res.json({
+      result: `📖 Story: ${prompt} became a viral story...`
+    });
+  }
+
+  if (type === "image") {
+    return res.json({
+      result: `🖼 Image idea for: ${prompt}`
+    });
+  }
+
+  if (type === "video") {
+    return res.json({
+      result: `🎬 Video idea: Make a viral reel about "${prompt}"`
+    });
+  }
+
+  res.json({
+    result: `✨ AI Result: ${prompt}`
+  });
+});
+
+// ✅ ALWAYS load frontend (VERY IMPORTANT)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
+});
+
+// ✅ Start server
 const PORT = process.env.PORT || 10000;
+
 app.listen(PORT, () => {
-  console.log("Server running");
+  console.log(`🚀 Server running on port ${PORT}`);
 });
