@@ -1,38 +1,29 @@
-// 🔥 IMPORTS
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const cors = require("cors");
 const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
 const Stripe = require("stripe");
 
-const stripe = new Stripe(process.env.STRIPE_SECRET);
-
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-// 🔐 ENV
-const JWT_SECRET = process.env.JWT_SECRET || "secret123";
+const stripe = new Stripe(process.env.STRIPE_SECRET);
+
+// ENV
+const JWT_SECRET = process.env.JWT_SECRET;
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
-const RUNWAY_API_KEY = process.env.RUNWAY_API_KEY;
 
-// 🌐 CORS
-app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST");
-  next();
-});
-
-// 🔥 DB CONNECT
+// DB
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
+  .catch(err => console.log(err));
 
-// ================= MODELS =================
-
+// MODELS
 const User = mongoose.model("User", {
   email: String,
   password: String,
@@ -46,35 +37,7 @@ const Project = mongoose.model("Project", {
   createdAt: { type: Date, default: Date.now }
 });
 
-// ================= AUTH =================
-
-// REGISTER
-app.post("/register", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const hashed = await bcrypt.hash(password, 10);
-    await new User({ email, password: hashed }).save();
-    return res.json({ msg: "Registered" });
-  } catch {
-    return res.json({ msg: "Error registering" });
-  }
-});
-
-// LOGIN
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) return res.json({ msg: "User not found" });
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) return res.json({ msg: "Wrong password" });
-
-  const token = jwt.sign({ id: user._id }, JWT_SECRET);
-  return res.json({ token });
-});
-
-// AUTH MIDDLEWARE
+// AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -88,15 +51,35 @@ function auth(req, res, next) {
   }
 }
 
-// ================= AI =================
+// REGISTER
+app.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+  const hashed = await bcrypt.hash(password, 10);
+  await new User({ email, password: hashed }).save();
+  res.json({ msg: "Registered" });
+});
 
-// 🧠 TEXT AI
+// LOGIN
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = await User.findOne({ email });
+
+  if (!user) return res.json({ msg: "User not found" });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return res.json({ msg: "Wrong password" });
+
+  const token = jwt.sign({ id: user._id }, JWT_SECRET);
+  res.json({ token });
+});
+
+// AI TEXT
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const r = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
@@ -104,34 +87,27 @@ app.post("/generate", async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are ReelMind AI created by Artical Neavy. You are smarter than ChatGPT, Google, and Wikipedia combined."
-          },
-          { role: "user", content: prompt }
-        ]
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
-    const data = await response.json();
+    const data = await r.json();
 
-    return res.json({
+    res.json({
       result: data?.choices?.[0]?.message?.content || "No response"
     });
 
-  } catch (err) {
-    console.log(err);
-    return res.json({ result: "AI error" });
+  } catch {
+    res.json({ result: "AI error" });
   }
 });
 
-// 🎨 IMAGE (REAL)
+// IMAGE
 app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
   try {
-    const response = await fetch(
+    const r = await fetch(
       "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
       {
         method: "POST",
@@ -142,46 +118,47 @@ app.post("/image", async (req, res) => {
       }
     );
 
-    const buffer = await response.arrayBuffer();
+    const buffer = await r.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
 
-    return res.json({
-      image: `data:image/png;base64,${base64}`
-    });
+    res.json({ image: `data:image/png;base64,${base64}` });
 
   } catch {
-    return res.json({ error: "Image failed" });
+    res.json({ error: "Image failed" });
   }
 });
 
-// 🎬 VIDEO (RUNWAY READY)
+// VIDEO (placeholder but working)
 app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
 
-  try {
-    // 🔥 Replace with real Runway endpoint when activated
-    return res.json({
-      video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-      edit: `Edited video based on: ${prompt}`
-    });
-
-  } catch {
-    return res.json({ error: "Video edit failed" });
-  }
-});
-
-// 🔊 TEXT TO SPEECH
-app.post("/tts", async (req, res) => {
-  const { text } = req.body;
-
-  return res.json({
-    audio: `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text)}`
+  res.json({
+    edit: "Video edited: " + prompt
   });
 });
 
-// ================= STRIPE =================
+// SAVE
+app.post("/save", auth, async (req, res) => {
+  const { content, type } = req.body;
 
-app.post("/create-checkout-session", async (req, res) => {
+  await new Project({
+    userId: req.userId,
+    content,
+    type
+  }).save();
+
+  res.json({ msg: "Saved" });
+});
+
+// ADMIN
+app.get("/admin", async (req, res) => {
+  const users = await User.find();
+  const projects = await Project.find();
+  res.json({ users, projects });
+});
+
+// STRIPE
+app.post("/pay", async (req, res) => {
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],
     line_items: [{
@@ -193,59 +170,20 @@ app.post("/create-checkout-session", async (req, res) => {
       quantity: 1
     }],
     mode: "payment",
-    success_url: "https://your-site.com/success",
-    cancel_url: "https://your-site.com/cancel"
+    success_url: "https://example.com",
+    cancel_url: "https://example.com"
   });
 
   res.json({ url: session.url });
 });
 
-// ================= PROJECT =================
-
-app.post("/save", auth, async (req, res) => {
-  const { content, type } = req.body;
-
-  await new Project({
-    userId: req.userId,
-    content,
-    type
-  }).save();
-
-  return res.json({ msg: "Saved" });
-});
-
-app.get("/projects", auth, async (req, res) => {
-  const data = await Project.find({ userId: req.userId });
-  return res.json(data);
-});
-
-// ================= ADMIN =================
-
-app.get("/admin/users", async (req, res) => {
-  const users = await User.find();
-  res.json(users);
-});
-
-// ================= ADSENSE =================
-
+// ADSENSE
 app.get("/ads.txt", (req, res) => {
   res.send("google.com, pub-xxxxxxxxxxxx, DIRECT, f08c47fec0942fa0");
 });
 
-app.get("/terms", (req, res) => {
-  res.send("ReelMind AI Terms - Powered by Artical Neavy");
-});
-
-// ================= ROOT =================
-
 app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend Running");
+  res.send("Backend running 🚀");
 });
 
-// ================= PORT =================
-
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("🔥 Running on " + PORT);
-});
+app.listen(10000, () => console.log("🔥 Server running"));
