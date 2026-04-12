@@ -7,7 +7,7 @@ let conversation = [];
 
 app.use(express.json());
 
-// CORS
+// CORS (allow frontend)
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -26,7 +26,7 @@ app.post("/generate", async (req, res) => {
   // add user message
   conversation.push({ role: "user", content: prompt });
 
-  // limit memory (keep last 10 messages)
+  // keep only last 10 messages
   if (conversation.length > 10) {
     conversation.shift();
   }
@@ -70,7 +70,7 @@ app.post("/reset", (req, res) => {
   res.json({ result: "Memory cleared." });
 });
 
-// ROOT
+// ROOT (Render health)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
