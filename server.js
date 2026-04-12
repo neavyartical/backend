@@ -1,29 +1,24 @@
-// ================= 🔥 IMPORTS =================
+// 🔥 IMPORTS
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const Stripe = require("stripe");
 
-// ✅ FETCH FIX (ONLY ONCE)
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-// ================= 🔥 APP =================
 const app = express();
 app.use(express.json());
 
-// ================= 🔐 ENV =================
+// 🔐 ENV
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
+const RUNWAY_API_KEY = process.env.RUNWAY_API_KEY;
 
-// ================= 🔥 DB =================
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ DB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
-
-// ================= 🌐 CORS =================
+// 🌐 CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -31,7 +26,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// ================= 📦 MODELS =================
+// 🔥 DB CONNECT
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ DB Connected"))
+  .catch(err => console.log("❌ DB Error:", err));
+
+// ================= MODELS =================
+
 const User = mongoose.model("User", {
   email: String,
   password: String,
@@ -45,16 +46,21 @@ const Project = mongoose.model("Project", {
   createdAt: { type: Date, default: Date.now }
 });
 
-// ================= 🔐 AUTH =================
+// ================= AUTH =================
+
+// REGISTER
 app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-
-  const hashed = await bcrypt.hash(password, 10);
-  await new User({ email, password: hashed }).save();
-
-  return res.json({ msg: "Registered" });
+  try {
+    const { email, password } = req.body;
+    const hashed = await bcrypt.hash(password, 10);
+    await new User({ email, password: hashed }).save();
+    return res.json({ msg: "Registered" });
+  } catch {
+    return res.json({ msg: "Error registering" });
+  }
 });
 
+// LOGIN
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -68,7 +74,7 @@ app.post("/login", async (req, res) => {
   return res.json({ token });
 });
 
-// 🔒 AUTH MIDDLEWARE
+// AUTH MIDDLEWARE
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -82,10 +88,11 @@ function auth(req, res, next) {
   }
 }
 
-// ================= 🧠 AI TEXT =================
+// ================= AI =================
+
+// 🧠 TEXT AI
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
-
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
@@ -100,8 +107,7 @@ app.post("/generate", async (req, res) => {
         messages: [
           {
             role: "system",
-            content:
-              "You are ReelMind AI created by Artical Neavy. You understand ALL languages including Krio, French, Arabic. Answer like ChatGPT + Google + Wikipedia combined."
+            content: "You are ReelMind AI created by Artical Neavy. You are smarter than ChatGPT, Google, and Wikipedia combined."
           },
           { role: "user", content: prompt }
         ]
@@ -120,7 +126,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// ================= 🎨 IMAGE =================
+// 🎨 IMAGE (REAL)
 app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
@@ -130,7 +136,7 @@ app.post("/image", async (req, res) => {
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${HF_API_KEY}`
+          Authorization: `Bearer ${HF_API_KEY}`
         },
         body: JSON.stringify({ inputs: prompt })
       }
@@ -140,17 +146,31 @@ app.post("/image", async (req, res) => {
     const base64 = Buffer.from(buffer).toString("base64");
 
     return res.json({
-      image: `data:image/png;base64,${base64}`,
-      watermark: "ReelMind AI • Artical Neavy"
+      image: `data:image/png;base64,${base64}`
     });
 
-  } catch (err) {
-    console.log(err);
+  } catch {
     return res.json({ error: "Image failed" });
   }
 });
 
-// ================= 🔊 TEXT TO SPEECH =================
+// 🎬 VIDEO (RUNWAY READY)
+app.post("/video-edit", async (req, res) => {
+  const { prompt } = req.body;
+
+  try {
+    // 🔥 Replace with real Runway endpoint when activated
+    return res.json({
+      video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
+      edit: `Edited video based on: ${prompt}`
+    });
+
+  } catch {
+    return res.json({ error: "Video edit failed" });
+  }
+});
+
+// 🔊 TEXT TO SPEECH
 app.post("/tts", async (req, res) => {
   const { text } = req.body;
 
@@ -159,17 +179,29 @@ app.post("/tts", async (req, res) => {
   });
 });
 
-// ================= 🎬 VIDEO EDIT =================
-app.post("/video-edit", async (req, res) => {
-  const { prompt } = req.body;
+// ================= STRIPE =================
 
-  return res.json({
-    edit: `AI edited video based on: ${prompt}`,
-    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4"
+app.post("/create-checkout-session", async (req, res) => {
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: [{
+      price_data: {
+        currency: "usd",
+        product_data: { name: "ReelMind Pro" },
+        unit_amount: 500
+      },
+      quantity: 1
+    }],
+    mode: "payment",
+    success_url: "https://your-site.com/success",
+    cancel_url: "https://your-site.com/cancel"
   });
+
+  res.json({ url: session.url });
 });
 
-// ================= 💾 SAVE =================
+// ================= PROJECT =================
+
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -182,30 +214,38 @@ app.post("/save", auth, async (req, res) => {
   return res.json({ msg: "Saved" });
 });
 
-// ================= 📂 LOAD =================
 app.get("/projects", auth, async (req, res) => {
-  const projects = await Project.find({ userId: req.userId });
-  return res.json(projects);
+  const data = await Project.find({ userId: req.userId });
+  return res.json(data);
 });
 
-// ================= 💰 ADSENSE =================
+// ================= ADMIN =================
+
+app.get("/admin/users", async (req, res) => {
+  const users = await User.find();
+  res.json(users);
+});
+
+// ================= ADSENSE =================
+
 app.get("/ads.txt", (req, res) => {
   res.send("google.com, pub-xxxxxxxxxxxx, DIRECT, f08c47fec0942fa0");
 });
 
-// ================= 📜 TERMS =================
 app.get("/terms", (req, res) => {
   res.send("ReelMind AI Terms - Powered by Artical Neavy");
 });
 
-// ================= 🚀 ROOT =================
+// ================= ROOT =================
+
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend Running");
 });
 
-// ================= 🔥 PORT =================
+// ================= PORT =================
+
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Running on port " + PORT);
+  console.log("🔥 Running on " + PORT);
 });
