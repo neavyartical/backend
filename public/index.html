@@ -1,25 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
   <title>ReelMind AI</title>
-  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <h1>🔥 ReelMind AI</h1>
+<h1>ReelMind AI</h1>
 
-  <input id="prompt" placeholder="Enter your idea..." />
+<input id="prompt" placeholder="Enter something" />
+<button onclick="generate('story')">Generate</button>
 
-  <div>
-    <button onclick="generate('story')">📖 Story</button>
-    <button onclick="generate('image')">🖼 Image</button>
-    <button onclick="generate('video')">🎬 Video</button>
-  </div>
+<div id="result"></div>
 
-  <div id="result"></div>
+<script>
+async function generate(type) {
+  const prompt = document.getElementById("prompt").value;
+  const res = await fetch("/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, type })
+  });
 
-  <script src="script.js"></script>
+  const data = await res.json();
+  document.getElementById("result").innerText = data.result;
+}
+</script>
+
 </body>
 </html>
-
