@@ -5,24 +5,44 @@
 </head>
 <body>
 
-<h1>ReelMind AI</h1>
+<h1>ReelMind AI 🚀</h1>
 
-<input id="prompt" placeholder="Enter something" />
-<button onclick="generate('story')">Generate</button>
+<input id="prompt" placeholder="Enter your idea" />
+<br><br>
 
+<button onclick="generate('story')">Story</button>
+<button onclick="generate('image')">Image</button>
+<button onclick="generate('video')">Video</button>
+
+<h3>Result:</h3>
 <div id="result"></div>
 
 <script>
 async function generate(type) {
   const prompt = document.getElementById("prompt").value;
-  const res = await fetch("/generate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, type })
-  });
+  const result = document.getElementById("result");
 
-  const data = await res.json();
-  document.getElementById("result").innerText = data.result;
+  if (!prompt) {
+    result.innerHTML = "❌ Enter something first";
+    return;
+  }
+
+  result.innerHTML = "⏳ Generating...";
+
+  try {
+    const res = await fetch("/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ prompt, type })
+    });
+
+    const data = await res.json();
+    result.innerHTML = data.result;
+  } catch (err) {
+    result.innerHTML = "❌ Error connecting to server";
+  }
 }
 </script>
 
