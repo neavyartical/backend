@@ -3,22 +3,19 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-// ✅ FETCH FIX (only once, clean)
-const fetch = (...args) => import("node-fetch").then(({ default: fetch }) => fetch(...args));
-
 const app = express();
 app.use(express.json());
 
-// ENV
+// 🔐 ENV
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// DB CONNECT
+// 🔥 CONNECT DB
 mongoose.connect(MONGO_URI)
   .then(() => console.log("DB Connected"))
-  .catch((err) => console.log(err));
+  .catch(err => console.log(err));
 
-// CORS
+// 🌐 CORS
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -26,19 +23,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// MODELS
+// 👤 USER MODEL
 const User = mongoose.model("User", {
   email: String,
   password: String
 });
 
+// 💾 PROJECT MODEL
 const Project = mongoose.model("Project", {
   userId: String,
   content: String,
   type: String
 });
 
-// REGISTER
+// 🔐 REGISTER
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
@@ -48,7 +46,7 @@ app.post("/register", async (req, res) => {
   res.json({ msg: "Registered" });
 });
 
-// LOGIN
+// 🔐 LOGIN
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
@@ -62,7 +60,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// AUTH
+// 🔒 AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -76,9 +74,10 @@ function auth(req, res, next) {
   }
 }
 
-// AI
+// 🧠 AI TEXT
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
+
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
@@ -106,14 +105,14 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// VIDEO
+// 🎬 VIDEO API
 app.post("/video", (req, res) => {
   res.json({
     video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4"
   });
 });
 
-// SAVE
+// 💾 SAVE PROJECT
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -126,18 +125,18 @@ app.post("/save", auth, async (req, res) => {
   res.json({ msg: "Saved" });
 });
 
-// LOAD
+// 📂 LOAD PROJECTS
 app.get("/projects", auth, async (req, res) => {
   const projects = await Project.find({ userId: req.userId });
   res.json(projects);
 });
 
-// ROOT
+// ROOT (IMPORTANT)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT
+// ✅ FINAL PORT FIX
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
