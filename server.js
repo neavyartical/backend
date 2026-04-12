@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// ✅ FIX FETCH (important for Render)
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+
 const app = express();
 app.use(express.json());
 
@@ -10,7 +13,7 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🔥 CONNECT DB (FIXED)
+// 🔥 CONNECT DB
 mongoose.connect(MONGO_URI)
   .then(() => console.log("DB Connected"))
   .catch(err => console.log(err));
@@ -63,7 +66,7 @@ app.post("/login", async (req, res) => {
   res.json({ token });
 });
 
-// 🔒 AUTH MIDDLEWARE
+// 🔒 AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -139,12 +142,12 @@ app.get("/projects", auth, async (req, res) => {
   res.json(projects);
 });
 
-// ROOT (IMPORTANT FOR RENDER)
+// ROOT
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT (FINAL FIX)
+// PORT (FIXED FINAL)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
