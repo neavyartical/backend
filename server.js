@@ -5,11 +5,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { OAuth2Client } = require("google-auth-library");
 
-// ✅ FETCH FIX (ONLY ONCE)
+// ✅ FETCH FIX
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// 🔥 APP INIT
 const app = express();
 app.use(express.json());
 
@@ -168,7 +167,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// 🎨 IMAGE (REAL FIXED)
+// 🎨 IMAGE
 app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
@@ -246,5 +245,5 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Running on " + PORT);
+  console.log("🔥 Server running on port " + PORT);
 });
