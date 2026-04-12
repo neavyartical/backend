@@ -10,7 +10,7 @@ app.use(express.json());
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 
-// 🔥 CONNECT DB (CLEAN)
+// 🔥 CONNECT DB (FIXED)
 mongoose.connect(MONGO_URI)
   .then(() => console.log("DB Connected"))
   .catch(err => console.log(err));
@@ -77,7 +77,7 @@ function auth(req, res, next) {
   }
 }
 
-// 🧠 AI TEXT (FINAL CLEAN)
+// 🧠 AI TEXT
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
@@ -139,12 +139,12 @@ app.get("/projects", auth, async (req, res) => {
   res.json(projects);
 });
 
-// ROOT
+// ROOT (IMPORTANT)
 app.get("/", (req, res) => {
   res.send("Backend running 🚀");
 });
 
-// PORT
+// PORT (FINAL FIX)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
