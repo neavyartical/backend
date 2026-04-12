@@ -54,7 +54,7 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// ✅ Start server
+// ✅ Start server (THIS WAS MISSING IN YOUR SCREENSHOT ❗)
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
