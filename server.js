@@ -1,16 +1,15 @@
-
 const express = require("express");
+const path = require("path");
 
 const app = express();
 
 app.use(express.json());
 
-// 🔥 ROOT ROUTE (THIS FIXES "NOT FOUND")
-app.get("/", (req, res) => {
-  res.send("✅ Backend is working perfectly");
-});
+// Serve frontend
+const publicPath = path.resolve(__dirname, "public");
+app.use(express.static(publicPath));
 
-// TEST API
+// API test
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK 🚀" });
 });
@@ -26,6 +25,11 @@ app.post("/generate", (req, res) => {
   res.json({
     result: `✨ AI Result: ${prompt}`
   });
+});
+
+// 🔥 LOAD FRONTEND AGAIN
+app.get("*", (req, res) => {
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
 // Start server
