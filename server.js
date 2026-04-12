@@ -1,29 +1,29 @@
-// 🔥 IMPORTS
+// ================= 🔥 IMPORTS =================
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { OAuth2Client } = require("google-auth-library");
 
-// ✅ FETCH FIX
+// ✅ FETCH FIX (ONLY ONCE)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
+// ================= 🔥 APP =================
 const app = express();
 app.use(express.json());
 
-// 🔐 ENV
+// ================= 🔐 ENV =================
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const HF_API_KEY = process.env.HF_API_KEY;
 
-// 🔥 DB
+// ================= 🔥 DB =================
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
   .catch(err => console.log("❌ DB Error:", err));
 
-// 🌐 CORS
+// ================= 🌐 CORS =================
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Headers", "*");
@@ -31,8 +31,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ================= MODELS =================
-
+// ================= 📦 MODELS =================
 const User = mongoose.model("User", {
   email: String,
   password: String,
@@ -46,8 +45,7 @@ const Project = mongoose.model("Project", {
   createdAt: { type: Date, default: Date.now }
 });
 
-// ================= AUTH =================
-
+// ================= 🔐 AUTH =================
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
@@ -61,7 +59,7 @@ app.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
   const user = await User.findOne({ email });
-  if (!user) return res.json({ msg: "No user" });
+  if (!user) return res.json({ msg: "User not found" });
 
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.json({ msg: "Wrong password" });
@@ -70,6 +68,7 @@ app.post("/login", async (req, res) => {
   return res.json({ token });
 });
 
+// 🔒 AUTH MIDDLEWARE
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -83,10 +82,10 @@ function auth(req, res, next) {
   }
 }
 
-// ================= AI (SMART MULTI-LANGUAGE) =================
-
+// ================= 🧠 AI TEXT =================
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
+
   if (!prompt) return res.json({ result: "Enter something." });
 
   try {
@@ -101,7 +100,8 @@ app.post("/generate", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are ReelMind AI created by Artical Neavy. You understand ALL languages including Krio, Pidgin, French, Arabic. Answer like ChatGPT + Google + Wikipedia combined. Be fast and intelligent."
+            content:
+              "You are ReelMind AI created by Artical Neavy. You understand ALL languages including Krio, French, Arabic. Answer like ChatGPT + Google + Wikipedia combined."
           },
           { role: "user", content: prompt }
         ]
@@ -120,18 +120,7 @@ app.post("/generate", async (req, res) => {
   }
 });
 
-// ================= 🔊 TEXT TO SPEECH =================
-
-app.post("/tts", async (req, res) => {
-  const { text } = req.body;
-
-  return res.json({
-    audio: `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text)}`
-  });
-});
-
 // ================= 🎨 IMAGE =================
-
 app.post("/image", async (req, res) => {
   const { prompt } = req.body;
 
@@ -156,24 +145,31 @@ app.post("/image", async (req, res) => {
     });
 
   } catch (err) {
+    console.log(err);
     return res.json({ error: "Image failed" });
   }
 });
 
-// ================= 🎬 AI VIDEO EDIT =================
+// ================= 🔊 TEXT TO SPEECH =================
+app.post("/tts", async (req, res) => {
+  const { text } = req.body;
 
-app.post("/video-edit", async (req, res) => {
-  const { prompt } = req.body;
-
-  // 🔥 simulate smart editing (next: connect Runway)
   return res.json({
-    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4",
-    edit: `AI edited video based on: ${prompt}`
+    audio: `https://api.streamelements.com/kappa/v2/speech?voice=Brian&text=${encodeURIComponent(text)}`
   });
 });
 
-// ================= 💾 PROJECT =================
+// ================= 🎬 VIDEO EDIT =================
+app.post("/video-edit", async (req, res) => {
+  const { prompt } = req.body;
 
+  return res.json({
+    edit: `AI edited video based on: ${prompt}`,
+    video: "https://samplelib.com/lib/preview/mp4/sample-5s.mp4"
+  });
+});
+
+// ================= 💾 SAVE =================
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -186,29 +182,30 @@ app.post("/save", auth, async (req, res) => {
   return res.json({ msg: "Saved" });
 });
 
+// ================= 📂 LOAD =================
 app.get("/projects", auth, async (req, res) => {
   const projects = await Project.find({ userId: req.userId });
   return res.json(projects);
 });
 
-// ================= SYSTEM =================
-
+// ================= 💰 ADSENSE =================
 app.get("/ads.txt", (req, res) => {
   res.send("google.com, pub-xxxxxxxxxxxx, DIRECT, f08c47fec0942fa0");
 });
 
+// ================= 📜 TERMS =================
 app.get("/terms", (req, res) => {
   res.send("ReelMind AI Terms - Powered by Artical Neavy");
 });
 
+// ================= 🚀 ROOT =================
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend Running");
 });
 
-// ================= PORT =================
-
+// ================= 🔥 PORT =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Running on " + PORT);
+  console.log("🔥 Running on port " + PORT);
 });
