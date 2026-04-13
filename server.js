@@ -9,25 +9,26 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ===== CONFIG =====
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET || "secret";
 
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
   .then(()=>console.log("✅ MongoDB Connected"))
-  .catch(err=>console.log(err));
+  .catch(err=>console.log("❌ DB Error:", err.message));
 
 // ===== MODEL =====
 const User = mongoose.model("User", new mongoose.Schema({
   email:String,
-  credits:{type:Number,default:20},
+  credits:{type:Number,default:50},
   premium:{type:Boolean,default:false},
   earnings:{type:Number,default:0}
 }));
 
 // ===== ROOT =====
 app.get("/", (req,res)=>{
-  res.send("🚀 ReelMind AI LIVE");
+  res.send("🚀 ReelMind AI Backend LIVE");
 });
 
 // ===== AUTH =====
@@ -55,7 +56,7 @@ app.post("/login", async (req,res)=>{
   res.json({token,user});
 });
 
-// ===== TEXT =====
+// ===== TEXT AI =====
 app.post("/generate-text", auth, async (req,res)=>{
   try{
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions",{
@@ -71,30 +72,48 @@ app.post("/generate-text", auth, async (req,res)=>{
     });
 
     const data = await response.json();
-    res.json({result:data?.choices?.[0]?.message?.content || "No response"});
+    const result = data?.choices?.[0]?.message?.content || "No response";
 
-  }catch{
+    res.json({result});
+
+  }catch(err){
+    console.log(err);
     res.json({error:"AI failed"});
   }
 });
 
-// ===== IMAGE (FIXED HARD) =====
+// ===== IMAGE (ALWAYS WORKS) =====
 app.post("/generate-image", auth, async (req,res)=>{
   try{
     const prompt = req.body.prompt;
 
-    const pollination = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Math.random()}`;
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Math.random()}`;
+    const fallback = `https://picsum.photos/800?random=${Math.random()}`;
 
-    // ALWAYS RETURN WORKING IMAGE
-    res.json({
-      image: pollination,
-      fallback: `https://picsum.photos/800?random=${Math.random()}`
-    });
+    res.json({image, fallback});
 
   }catch{
     res.json({
       image:`https://picsum.photos/800?random=${Math.random()}`
     });
+  }
+});
+
+// ===== VIDEO (NEW ROUTE) =====
+app.post("/generate-video", auth, async (req, res) => {
+  try {
+    const prompt = req.body.prompt;
+
+    // Demo video (replace later with Runway / Pika API)
+    const video = "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+
+    res.json({
+      video,
+      message: "Demo video — connect real AI API later"
+    });
+
+  } catch (err) {
+    res.json({ error: "Video generation failed" });
   }
 });
 
@@ -114,7 +133,9 @@ app.post("/generate-reel", auth, async (req,res)=>{
     });
 
     const data = await response.json();
-    res.json({result:data.choices[0].message.content});
+    const result = data?.choices?.[0]?.message?.content || "No reel";
+
+    res.json({result});
 
   }catch{
     res.json({error:"Reel failed"});
@@ -127,7 +148,7 @@ app.get("/dashboard", auth, async (req,res)=>{
   res.json(user);
 });
 
-// ===== START =====
+// ===== START SERVER =====
 app.listen(PORT,"0.0.0.0",()=>{
-  console.log("🚀 Server running on "+PORT);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
