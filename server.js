@@ -1,91 +1,170 @@
 const express = require("express");
 const cors = require("cors");
-const mongoose = require("mongoose");
 const fetch = require("node-fetch");
 const jwt = require("jsonwebtoken");
 const Stripe = require("stripe");
-require('dotenv').config();
 
 const app = express();
-
-// --- CORS Configuration ---
-app.use(cors({ origin: "*" })); 
+app.use(cors());
 app.use(express.json());
 
+// ===== CONFIG =====
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || "reelmind_global_key_2026";
+const SECRET = "reelmind_secret";
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-// --- MongoDB Connection ---
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.error("❌ DB Error:", err.message));
+// ===== DATABASE (TEMP MEMORY - WORKING) =====
+let users = [];
 
-// --- User Model ---
-const User = mongoose.model("User", new mongoose.Schema({
-  email: { type: String, unique: true },
-  credits: { type: Number, default: 20 },
-  premium: { type: Boolean, default: false }
-}));
+// ===== TEST =====
+app.get("/", (req, res) => {
+  res.send("🚀 ReelMind AI Backend LIVE");
+});
 
-// --- Auth Middleware ---
-const auth = (req, res, next) => {
+// ===== AUTH =====
+function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "No token" });
+
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(token, SECRET);
     next();
-  } catch { res.status(401).json({ error: "Invalid token" }); }
-};
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+}
 
-// --- Routes ---
-
-app.get("/", (req, res) => res.send("🚀 ReelMind AI Backend Live"));
-
-app.post("/login", async (req, res) => {
+// ===== LOGIN (AUTO CREATE USER) =====
+app.post("/login", (req, res) => {
   const { email } = req.body;
-  let user = await User.findOne({ email });
-  if (!user) user = await User.create({ email });
-  const token = jwt.sign({ email: user.email }, JWT_SECRET);
+
+  let user = users.find(u => u.email === email);
+
+  if (!user) {
+    user = {
+      email,
+      credits: 50,
+      premium: false,
+      earnings: 0
+    };
+    users.push(user);
+  }
+
+  const token = jwt.sign({ email }, SECRET);
   res.json({ token, user });
 });
 
-// GENERATE TEXT
-app.post("/generate-text", auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.user.email });
-    if (!user.premium && user.credits <= 0) return res.json({ error: "No credits" });
+// ===== DASHBOARD =====
+app.get("/dashboard", auth, (req, res) => {
+  const user = users.find(u => u.email === req.user.email);
+  res.json(user);
+});
 
+// ===== TEXT AI =====
+app.post("/generate-text", auth, async (req, res) => {
+  const user = users.find(u => u.email === req.user.email);
+
+  if (!user) return res.status(404).json({ error: "User not found" });
+  if (!user.premium && user.credits <= 0)
+    return res.json({ error: "No credits left" });
+
+  if (!user.premium) user.credits--;
+
+  try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://reelmind.ai", 
+        "Authorization": "Bearer " + OPENROUTER_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "openai/gpt-3.5-turbo",
         messages: [{ role: "user", content: req.body.prompt }]
       })
     });
 
     const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || "API Error";
+    res.json(data);
 
-    if (!user.premium) { user.credits--; await user.save(); }
-    res.json({ result: reply, credits: user.credits });
-  } catch (err) { res.status(500).json({ error: "Text Generation Failed" }); }
+  } catch {
+    res.status(500).json({ error: "AI failed" });
+  }
 });
 
-// GENERATE IMAGE
-app.post("/generate-image", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-  if (!user.premium && user.credits <= 0) return res.json({ error: "No credits" });
+// ===== IMAGE =====
+app.post("/generate-image", auth, (req, res) => {
+  const user = users.find(u => u.email === req.user.email);
 
-  const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(req.body.prompt)}?width=1024&height=1024&nologo=true&seed=${Math.random()}`;
-  
-  if (!user.premium) { user.credits--; await user.save(); }
-  res.json({ image: imageUrl, credits: user.credits });
+  if (!user.premium && user.credits <= 0)
+    return res.json({ error: "No credits left" });
+
+  if (!user.premium) user.credits--;
+
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+  res.json({ image: url });
 });
 
-app.listen(PORT, () => console.log(`🚀 API active on port ${PORT}`));
+// ===== REEL =====
+app.post("/viral-reel", auth, async (req, res) => {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + OPENROUTER_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-3.5-turbo",
+        messages: [{
+          role: "user",
+          content: "Create viral TikTok reel: " + req.body.prompt
+        }]
+      })
+    });
+
+    const data = await response.json();
+    res.json(data);
+
+  } catch {
+    res.status(500).json({ error: "Reel failed" });
+  }
+});
+
+// ===== STRIPE =====
+app.post("/pay", auth, async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: { name: "ReelMind Premium" },
+          unit_amount: 999
+        },
+        quantity: 1
+      }],
+      mode: "payment",
+      success_url: "https://your-site.com",
+      cancel_url: "https://your-site.com"
+    });
+
+    res.json({ url: session.url });
+
+  } catch {
+    res.status(500).json({ error: "Payment failed" });
+  }
+});
+
+// ===== PAYPAL =====
+app.get("/paypal", (req, res) => {
+  res.json({
+    url: "https://www.paypal.com/paypalme/YOURNAME/10"
+  });
+});
+
+// ===== START =====
+app.listen(PORT, () => {
+  console.log("🚀 Server running on " + PORT);
+});
