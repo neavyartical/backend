@@ -4,30 +4,31 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 
-// FETCH FIX (Render safe)
+// FETCH FIX
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// ================= INIT =================
+// INIT
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ================= ENV =================
+// ENV
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// ================= DB =================
+// DB
 if (!MONGO_URI) {
-  console.log("❌ MONGO_URI missing in environment variables");
+  console.log("❌ MONGO_URI missing — server will not start");
+  process.exit(1);
 }
 
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
   .catch(err => console.log("❌ DB Error:", err.message));
 
-// ================= MODELS =================
+// MODELS
 const User = mongoose.model("User", {
   email: String,
   password: String
@@ -39,9 +40,7 @@ const Project = mongoose.model("Project", {
   type: String
 });
 
-// ================= ROUTES =================
-
-// TEST ROUTE
+// ROUTES
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend is running");
 });
@@ -50,6 +49,11 @@ app.get("/", (req, res) => {
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(400).json({ error: "User already exists" });
+    }
 
     const hashed = await bcrypt.hash(password, 10);
 
@@ -88,6 +92,10 @@ app.post("/generate-text", async (req, res) => {
   try {
     const { prompt } = req.body;
 
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt is required" });
+    }
+
     if (!OPENROUTER_API_KEY) {
       return res.status(500).json({ error: "Missing API key" });
     }
@@ -95,7 +103,7 @@ app.post("/generate-text", async (req, res) => {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -106,13 +114,17 @@ app.post("/generate-text", async (req, res) => {
 
     const data = await response.json();
 
+    if (!response.ok) {
+      return res.status(500).json({ error: data });
+    }
+
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// SAVE PROJECT
+// SAVE
 app.post("/save", async (req, res) => {
   try {
     const { userId, content, type } = req.body;
@@ -129,7 +141,7 @@ app.post("/save", async (req, res) => {
   }
 });
 
-// ================= START =================
+// START
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
