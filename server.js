@@ -9,48 +9,47 @@ const jwt = require("jsonwebtoken");
 
 const app = express();
 
-// ===== MIDDLEWARE =====
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ===== CONFIG =====
+// CONFIG
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// ===== DATABASE =====
+// DATABASE
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.log("❌ DB ERROR:", err.message));
 
-// ===== USER MODEL =====
+// USER MODEL
 const User = mongoose.model("User", new mongoose.Schema({
   email: { type: String, unique: true },
-  credits: { type: Number, default: 20 },
-  premium: { type: Boolean, default: false },
-  earnings: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now }
+  credits: { type: Number, default: 100 },
+  premium: { type: Boolean, default: true }, // 🔥 UNLIMITED FOR NOW
 }));
 
-// ===== ROOT =====
+// ROOT
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend LIVE");
 });
 
-// ===== AUTH =====
+// AUTH
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
+
   if (!token) return res.status(401).json({ error: "No token" });
 
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
   } catch {
     return res.status(401).json({ error: "Invalid token" });
   }
 }
 
-// ===== LOGIN / REGISTER =====
+// LOGIN
 app.post("/login", async (req, res) => {
   const { email } = req.body;
 
@@ -67,35 +66,9 @@ app.post("/login", async (req, res) => {
   res.json({ token, user });
 });
 
-// ===== DASHBOARD =====
-app.get("/dashboard", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-  res.json(user);
-});
-
-// ===== CREDIT SYSTEM =====
-async function useCredit(user) {
-  if (!user.premium && user.credits <= 0) return false;
-
-  if (!user.premium) {
-    user.credits -= 1;
-    await user.save();
-  }
-
-  return true;
-}
-
-// ===== AI TEXT =====
+// TEXT GENERATION
 app.post("/generate-text", auth, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
-
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    if (!(await useCredit(user))) {
-      return res.json({ error: "No credits left" });
-    }
-
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -104,100 +77,35 @@ app.post("/generate-text", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-3.5-turbo",
-        messages: [
-          { role: "user", content: req.body.prompt }
-        ]
+        messages: [{ role: "user", content: req.body.prompt }]
       })
     });
 
     const data = await response.json();
 
-    const reply =
-      data?.choices?.[0]?.message?.content || "No response";
-
     res.json({
-      result: reply,
-      credits: user.credits
+      result: data?.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
     console.log(err);
-    res.status(500).json({ error: "AI generation failed" });
+    res.status(500).json({ error: "AI failed" });
   }
 });
 
-// ===== IMAGE (POLLINATIONS) =====
+// IMAGE GENERATION
 app.post("/generate-image", auth, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
-
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    if (!(await useCredit(user))) {
-      return res.json({ error: "No credits left" });
-    }
-
     const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
 
-    res.json({
-      image,
-      credits: user.credits
-    });
+    res.json({ image });
 
   } catch {
     res.status(500).json({ error: "Image failed" });
   }
 });
 
-// ===== VIRAL REEL =====
-app.post("/viral-reel", auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.user.email });
-
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    if (!(await useCredit(user))) {
-      return res.json({ error: "No credits left" });
-    }
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + OPENROUTER_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
-        messages: [{
-          role: "user",
-          content: "Create a viral TikTok reel script: " + req.body.prompt
-        }]
-      })
-    });
-
-    const data = await response.json();
-
-    const reply =
-      data?.choices?.[0]?.message?.content || "No response";
-
-    res.json({
-      result: reply,
-      credits: user.credits
-    });
-
-  } catch {
-    res.status(500).json({ error: "Reel failed" });
-  }
-});
-
-// ===== PAYMENT (KO-FI) =====
-app.get("/pay", (req, res) => {
-  res.json({
-    url: "https://ko-fi.com/articalneavy"
-  });
-});
-
-// ===== START =====
+// START SERVER
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port " + PORT);
+  console.log("🚀 Server running on " + PORT);
 });
