@@ -6,11 +6,11 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const Stripe = require("stripe");
 
-// FETCH (Render safe)
+// FETCH FIX (Render safe)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// ================= INIT =================
+// ================= APP =================
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -44,28 +44,6 @@ const Project = mongoose.model("Project", {
 });
 
 // ================= AUTH =================
-app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  const hashed = await bcrypt.hash(password, 10);
-
-  await new User({ email, password: hashed }).save();
-
-  return res.json({ msg: "Registered" });
-});
-
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) return res.json({ msg: "User not found" });
-
-  const valid = await bcrypt.compare(password, user.password);
-  if (!valid) return res.json({ msg: "Wrong password" });
-
-  const token = jwt.sign({ id: user._id }, JWT_SECRET);
-  return res.json({ token });
-});
-
 function auth(req, res, next) {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send("No token");
@@ -79,9 +57,34 @@ function auth(req, res, next) {
   }
 }
 
+// REGISTER
+app.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+
+  const hashed = await bcrypt.hash(password, 10);
+  await new User({ email, password: hashed }).save();
+
+  return res.json({ msg: "Registered" });
+});
+
+// LOGIN
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) return res.json({ msg: "User not found" });
+
+  const valid = await bcrypt.compare(password, user.password);
+  if (!valid) return res.json({ msg: "Wrong password" });
+
+  const token = jwt.sign({ id: user._id }, JWT_SECRET);
+  return res.json({ token });
+});
+
 // ================= AI TEXT =================
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
+  if (!prompt) return res.json({ result: "Enter something" });
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -95,7 +98,7 @@ app.post("/generate", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are ReelMind AI created by Artical Neavy. Answer like ChatGPT + Google + Wikipedia."
+            content: "You are ReelMind AI created by Artical Neavy. Answer like ChatGPT + Google."
           },
           { role: "user", content: prompt }
         ]
@@ -134,22 +137,41 @@ app.post("/image", async (req, res) => {
     const base64 = Buffer.from(buffer).toString("base64");
 
     return res.json({
-      image: `data:image/png;base64,${base64}`,
-      watermark: "ReelMind AI • Artical Neavy"
+      image: `data:image/png;base64,${base64}`
     });
 
-  } catch {
+  } catch (err) {
+    console.log(err);
     return res.json({ error: "Image failed" });
   }
 });
 
-// ================= VIDEO =================
+// ================= VIDEO EDIT =================
 app.post("/video-edit", async (req, res) => {
   const { prompt } = req.body;
 
   return res.json({
-    edit: "Video edited: " + prompt
+    edit: "AI edited video based on: " + prompt
   });
+});
+
+// ================= SAVE =================
+app.post("/save", auth, async (req, res) => {
+  const { content, type } = req.body;
+
+  await new Project({
+    userId: req.userId,
+    content,
+    type
+  }).save();
+
+  return res.json({ msg: "Saved" });
+});
+
+// ================= LOAD =================
+app.get("/projects", auth, async (req, res) => {
+  const projects = await Project.find({ userId: req.userId });
+  return res.json(projects);
 });
 
 // ================= STRIPE =================
@@ -160,7 +182,9 @@ app.post("/pay", async (req, res) => {
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: { name: "ReelMind Premium" },
+          product_data: {
+            name: "ReelMind Premium"
+          },
           unit_amount: 500
         },
         quantity: 1
@@ -178,11 +202,12 @@ app.post("/pay", async (req, res) => {
   }
 });
 
-// SUCCESS / CANCEL
+// SUCCESS
 app.get("/success", (req, res) => {
-  res.send("<h1>✅ Payment Successful 🚀</h1>");
+  res.send("<h1>✅ Payment Successful</h1>");
 });
 
+// CANCEL
 app.get("/cancel", (req, res) => {
   res.send("<h1>❌ Payment Cancelled</h1>");
 });
@@ -195,8 +220,13 @@ app.get("/admin", async (req, res) => {
   return res.json({
     users,
     projects,
-    note: "Check Stripe dashboard for money 💰"
+    note: "Revenue in Stripe dashboard"
   });
+});
+
+// ================= ADS =================
+app.get("/ads.txt", (req, res) => {
+  res.send("google.com, pub-1714638410489429, DIRECT, f08c47fec0942fa0");
 });
 
 // ================= REQUIRED PAGES =================
@@ -213,12 +243,7 @@ app.get("/contact", (req, res) => {
 });
 
 app.get("/blog", (req, res) => {
-  res.send("<h1>Blog</h1><p>AI content coming soon</p>");
-});
-
-// ================= ADS =================
-app.get("/ads.txt", (req, res) => {
-  res.send("google.com, pub-1714638410489429, DIRECT, f08c47fec0942fa0");
+  res.send("<h1>Blog</h1><p>AI content and updates.</p>");
 });
 
 // ================= ROOT =================
@@ -226,7 +251,7 @@ app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend Running");
 });
 
-// ================= START =================
+// ================= PORT =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
