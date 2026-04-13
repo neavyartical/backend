@@ -1,62 +1,79 @@
-const express = require("express");
-const cors = require("cors");
-const fetch = require("node-fetch");
-const jwt = require("jsonwebtoken");
+import express from "express";
+import cors from "cors";
+import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
+import fetch from "node-fetch";
+import Stripe from "stripe";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// 🔐 SIMPLE MEMORY DB (upgrade later to MongoDB)
-let users = [];
+// 🔐 ENV
+const JWT_SECRET = "reelmind_secret";
+const OPENROUTER_KEY = "YOUR_OPENROUTER_KEY";
+const stripe = new Stripe("YOUR_STRIPE_SECRET");
 
-// 🔑 SECRET
-const SECRET = "reelmind_secret";
+// ================= DATABASE =================
+mongoose.connect("YOUR_MONGODB_URI");
 
-// ================= LOGIN =================
-app.post("/login", (req, res) => {
-  const { email, password } = req.body;
-
-  let user = users.find(u => u.email === email);
-
-  if (!user) {
-    user = { email, password, premium: false, balance: 0 };
-    users.push(user);
-  }
-
-  if (user.password !== password) {
-    return res.json({ error: "Wrong password" });
-  }
-
-  const token = jwt.sign({ email }, SECRET);
-
-  res.json({ token });
+const UserSchema = new mongoose.Schema({
+  email: String,
+  password: String,
+  premium: Boolean,
+  balance: Number
 });
 
-// ================= VERIFY TOKEN =================
+const User = mongoose.model("User", UserSchema);
+
+// ================= AUTH =================
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
-
   if (!token) return res.status(401).send("No token");
 
   try {
-    const decoded = jwt.verify(token, SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     res.status(401).send("Invalid token");
   }
 }
 
-// ================= TEXT (OPENROUTER) =================
+// ================= REGISTER =================
+app.post("/register", async (req, res) => {
+  const { email, password } = req.body;
+
+  const user = new User({
+    email,
+    password,
+    premium: false,
+    balance: 0
+  });
+
+  await user.save();
+
+  res.json({ success: true });
+});
+
+// ================= LOGIN =================
+app.post("/login", async (req, res) => {
+  const user = await User.findOne(req.body);
+
+  if (!user) return res.json({ error: "Invalid login" });
+
+  const token = jwt.sign({ email: user.email }, JWT_SECRET);
+  res.json({ token });
+});
+
+// ================= TEXT (AI) =================
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": "Bearer YOUR_OPENROUTER_API_KEY",
+        "Authorization": `Bearer ${OPENROUTER_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -68,43 +85,46 @@ app.post("/generate-text", auth, async (req, res) => {
     const data = await response.json();
     res.json(data);
 
-  } catch (err) {
-    res.status(500).json({ error: "Text generation failed" });
+  } catch {
+    res.status(500).json({ error: "AI failed" });
   }
 });
 
-// ================= IMAGE (POLLINATIONS) =================
-app.post("/generate-image", auth, async (req, res) => {
-  const prompt = req.body.prompt;
-
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
-
-  res.json({ image: imageUrl });
+// ================= IMAGE =================
+app.post("/generate-image", auth, (req, res) => {
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+  res.json({ image: url });
 });
 
-// ================= VIDEO (RUNWAY PLACEHOLDER) =================
+// ================= VIDEO =================
 app.post("/generate-video", auth, async (req, res) => {
-  res.json({
-    video: "Runway integration coming soon"
+  res.json({ message: "Runway API connect here" });
+});
+
+// ================= PAYMENT =================
+app.post("/create-checkout", auth, async (req, res) => {
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: [{
+      price_data: {
+        currency: "usd",
+        product_data: { name: "ReelMind Premium" },
+        unit_amount: 999
+      },
+      quantity: 1
+    }],
+    mode: "payment",
+    success_url: "https://your-site.com/success",
+    cancel_url: "https://your-site.com/cancel"
   });
+
+  res.json({ url: session.url });
 });
 
-// ================= PAYMENT (FAKE FOR NOW) =================
-app.post("/subscribe", auth, (req, res) => {
-  const user = users.find(u => u.email === req.user.email);
-  user.premium = true;
-  res.json({ success: true });
+// ================= DASHBOARD =================
+app.get("/dashboard", auth, async (req, res) => {
+  const user = await User.findOne({ email: req.user.email });
+  res.json(user);
 });
 
-// ================= USER DASHBOARD =================
-app.get("/dashboard", auth, (req, res) => {
-  const user = users.find(u => u.email === req.user.email);
-
-  res.json({
-    email: user.email,
-    premium: user.premium,
-    balance: user.balance
-  });
-});
-
-app.listen(PORT, () => console.log("Server running on " + PORT));
+app.listen(PORT, () => console.log("Server running"));
