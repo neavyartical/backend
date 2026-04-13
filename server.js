@@ -4,21 +4,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 
-// Fetch fix for node-fetch (Render safe)
+// FETCH FIX (Render safe)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// App init
+// ================= INIT =================
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Env variables
+// ================= ENV =================
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// MongoDB connection
+// ================= DB =================
 if (!MONGO_URI) {
   console.log("❌ MONGO_URI missing — server will not start");
   process.exit(1);
@@ -28,7 +28,7 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
   .catch(err => console.log("❌ DB Error:", err.message));
 
-// Models
+// ================= MODELS =================
 const User = mongoose.model("User", {
   email: String,
   password: String
@@ -40,12 +40,14 @@ const Project = mongoose.model("Project", {
   type: String
 });
 
-// Routes
+// ================= ROUTES =================
+
+// TEST ROUTE
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend is running");
 });
 
-// Register
+// REGISTER
 app.post("/register", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -69,7 +71,7 @@ app.post("/register", async (req, res) => {
   }
 });
 
-// Login
+// LOGIN
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -89,7 +91,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// Generate AI text (OpenRouter)
+// AI TEXT (OpenRouter)
 app.post("/generate-text", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -110,14 +112,11 @@ app.post("/generate-text", async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-3.5-turbo",
-        messages: [
-          { role: "user", content: prompt }
-        ]
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
-
     res.json(data);
 
   } catch (err) {
@@ -125,7 +124,7 @@ app.post("/generate-text", async (req, res) => {
   }
 });
 
-// Save project
+// SAVE PROJECT
 app.post("/save", async (req, res) => {
   try {
     const { userId, content, type } = req.body;
@@ -143,7 +142,7 @@ app.post("/save", async (req, res) => {
   }
 });
 
-// Start server
+// ================= START =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
