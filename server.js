@@ -1,12 +1,14 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const fetch = require("node-fetch");
 const jwt = require("jsonwebtoken");
-const Stripe = require("stripe");
-require("dotenv").config();
 
 const app = express();
+
+// ===== MIDDLEWARE =====
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
@@ -14,7 +16,6 @@ app.use(express.json());
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
@@ -26,13 +27,18 @@ const User = mongoose.model("User", new mongoose.Schema({
   email: { type: String, unique: true },
   credits: { type: Number, default: 20 },
   premium: { type: Boolean, default: false },
-  earnings: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 }));
+
+// ===== ROOT =====
+app.get("/", (req, res) => {
+  res.send("🚀 ReelMind AI Backend LIVE");
+});
 
 // ===== AUTH =====
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
+
   if (!token) return res.status(401).json({ error: "No token" });
 
   try {
@@ -43,19 +49,20 @@ function auth(req, res, next) {
   }
 }
 
-// ===== ROOT =====
-app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend LIVE");
-});
-
-// ===== LOGIN =====
+// ===== LOGIN / REGISTER =====
 app.post("/login", async (req, res) => {
   const { email } = req.body;
 
-  let user = await User.findOne({ email });
-  if (!user) user = await User.create({ email });
+  if (!email) return res.status(400).json({ error: "Email required" });
 
-  const token = jwt.sign({ email }, JWT_SECRET);
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    user = await User.create({ email });
+  }
+
+  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
+
   res.json({ token, user });
 });
 
@@ -70,16 +77,20 @@ async function useCredit(user) {
   if (!user.premium && user.credits <= 0) return false;
 
   if (!user.premium) {
-    user.credits--;
+    user.credits -= 1;
     await user.save();
   }
+
   return true;
 }
 
-// ===== TEXT AI =====
+// ===== AI TEXT =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
     if (!(await useCredit(user)))
       return res.json({ error: "No credits left" });
 
@@ -97,32 +108,48 @@ app.post("/generate-text", auth, async (req, res) => {
 
     const data = await response.json();
 
+    const reply =
+      data?.choices?.[0]?.message?.content || "AI failed";
+
     res.json({
-      result: data?.choices?.[0]?.message?.content || "No response",
+      result: reply,
       credits: user.credits
     });
 
   } catch (err) {
-    res.status(500).json({ error: "AI failed" });
+    console.log(err);
+    res.status(500).json({ error: "AI generation failed" });
   }
 });
 
 // ===== IMAGE =====
 app.post("/generate-image", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
+  try {
+    const user = await User.findOne({ email: req.user.email });
 
-  if (!(await useCredit(user)))
-    return res.json({ error: "No credits left" });
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-  const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+    if (!(await useCredit(user)))
+      return res.json({ error: "No credits left" });
 
-  res.json({ image, credits: user.credits });
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+
+    res.json({
+      image,
+      credits: user.credits
+    });
+
+  } catch {
+    res.status(500).json({ error: "Image failed" });
+  }
 });
 
-// ===== REEL =====
+// ===== VIRAL REEL =====
 app.post("/viral-reel", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
+
+    if (!user) return res.status(404).json({ error: "User not found" });
 
     if (!(await useCredit(user)))
       return res.json({ error: "No credits left" });
@@ -137,15 +164,18 @@ app.post("/viral-reel", auth, async (req, res) => {
         model: "openai/gpt-3.5-turbo",
         messages: [{
           role: "user",
-          content: "Create viral TikTok reel script: " + req.body.prompt
+          content: "Create a viral TikTok reel: " + req.body.prompt
         }]
       })
     });
 
     const data = await response.json();
 
+    const reply =
+      data?.choices?.[0]?.message?.content || "Reel failed";
+
     res.json({
-      result: data?.choices?.[0]?.message?.content || "No response",
+      result: reply,
       credits: user.credits
     });
 
@@ -154,35 +184,10 @@ app.post("/viral-reel", auth, async (req, res) => {
   }
 });
 
-// ===== STRIPE PAYMENT =====
-app.post("/pay", auth, async (req, res) => {
-  try {
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: "ReelMind Premium" },
-          unit_amount: 999
-        },
-        quantity: 1
-      }],
-      mode: "payment",
-      success_url: "https://your-site.com",
-      cancel_url: "https://your-site.com"
-    });
-
-    res.json({ url: session.url });
-
-  } catch {
-    res.status(500).json({ error: "Payment failed" });
-  }
-});
-
-// ===== PAYPAL =====
-app.get("/paypal", (req, res) => {
+// ===== PAYMENT (KO-FI LINK) =====
+app.get("/pay", (req, res) => {
   res.json({
-    url: "https://www.paypal.com/paypalme/YOURNAME/10"
+    url: "https://ko-fi.com/articalneavy"
   });
 });
 
