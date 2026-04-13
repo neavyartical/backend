@@ -1,6 +1,7 @@
 {
   "name": "reelmind-backend",
   "version": "1.0.0",
+  "description": "ReelMind AI Backend",
   "type": "module",
   "main": "server.js",
   "scripts": {
