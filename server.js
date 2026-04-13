@@ -19,9 +19,13 @@ const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // ================= DB =================
+if (!MONGO_URI) {
+  console.log("❌ MONGO_URI missing in environment variables");
+}
+
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ DB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
+  .catch(err => console.log("❌ DB Error:", err.message));
 
 // ================= MODELS =================
 const User = mongoose.model("User", {
@@ -37,7 +41,7 @@ const Project = mongoose.model("Project", {
 
 // ================= ROUTES =================
 
-// TEST ROUTE (VERY IMPORTANT)
+// TEST ROUTE
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend is running");
 });
@@ -79,10 +83,14 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// AI TEXT (OPENROUTER)
+// AI TEXT
 app.post("/generate-text", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    if (!OPENROUTER_API_KEY) {
+      return res.status(500).json({ error: "Missing API key" });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -121,7 +129,7 @@ app.post("/save", async (req, res) => {
   }
 });
 
-// ================= START SERVER =================
+// ================= START =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
