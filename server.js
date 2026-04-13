@@ -4,21 +4,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 
-// FETCH FIX (Render safe)
+Render safe)
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// ================= INIT =================
+
 const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ================= ENV =================
+
 const JWT_SECRET = process.env.JWT_SECRET || "secret123";
 const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// ================= DB =================
+
 if (!MONGO_URI) {
   console.log("❌ MONGO_URI missing — server will not start");
   process.exit(1);
