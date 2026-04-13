@@ -2,7 +2,6 @@
   "name": "reelmind-backend",
   "version": "1.0.0",
   "description": "ReelMind AI Backend",
-  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -16,7 +15,6 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.0.0",
-    "node-fetch": "^3.3.2",
-    "stripe": "^12.0.0"
+    "node-fetch": "^3.3.2"
   }
 }
