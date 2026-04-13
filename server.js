@@ -22,9 +22,7 @@ mongoose.connect(process.env.MONGO_URI)
 // ===== MODELS =====
 const User = mongoose.model("User", new mongoose.Schema({
   email: { type: String, unique: true },
-  credits: { type: Number, default: 20 },
-  premium: { type: Boolean, default: false },
-  earnings: { type: Number, default: 0 }
+  createdAt: { type: Date, default: Date.now }
 }));
 
 const Prompt = mongoose.model("Prompt", new mongoose.Schema({
@@ -42,81 +40,36 @@ app.get("/", (req, res) => {
 // ===== AUTH =====
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
-
   if (!token) return res.status(401).json({ error: "No token" });
 
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
-  } catch (err) {
-    console.log("JWT ERROR:", err.message);
+  } catch {
     return res.status(401).json({ error: "Invalid token" });
   }
 }
 
 // ===== LOGIN =====
 app.post("/login", async (req, res) => {
-  try {
-    const { email } = req.body;
+  const { email } = req.body;
 
-    if (!email) return res.json({ error: "Email required" });
+  if (!email) return res.json({ error: "Email required" });
 
-    let user = await User.findOne({ email });
-    if (!user) user = await User.create({ email });
+  let user = await User.findOne({ email });
+  if (!user) user = await User.create({ email });
 
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
+  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
 
-    res.json({ token, user });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Login failed" });
-  }
+  res.json({ token, user });
 });
 
-// ===== VERIFY PAYMENT =====
-app.post("/verify-payment", auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.user.email });
-
-    user.premium = true;
-    user.credits += 100;
-    await user.save();
-
-    res.json({ message: "✅ Premium Activated", user });
-
-  } catch {
-    res.status(500).json({ error: "Payment verification failed" });
-  }
-});
-
-// ===== DASHBOARD =====
-app.get("/dashboard", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-  res.json(user);
-});
-
-// ===== TEXT AI (UPGRADED) =====
+// ===== TEXT AI (UNLIMITED) =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
-
-    if (!user) return res.json({ error: "User not found" });
-
     const prompt = req.body.prompt;
 
-    if (!prompt || prompt.trim() === "") {
-      return res.json({ error: "Prompt is empty" });
-    }
-
-    if (!user.premium && user.credits <= 0) {
-      return res.json({ error: "No credits left" });
-    }
-
-    if (!user.premium) {
-      user.credits -= 1;
-      await user.save();
-    }
+    if (!prompt) return res.json({ error: "Prompt empty" });
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -125,22 +78,16 @@ app.post("/generate-text", auth, async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo", // ⚡ faster & stable
+        model: "openai/gpt-3.5-turbo",
         messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
-    console.log("AI RAW:", data);
 
     const reply =
       data?.choices?.[0]?.message?.content ||
-      data?.choices?.[0]?.text ||
-      null;
-
-    if (!reply) {
-      return res.json({ error: "AI returned no response" });
-    }
+      "No response";
 
     await Prompt.create({
       email: req.user.email,
@@ -148,31 +95,22 @@ app.post("/generate-text", auth, async (req, res) => {
       result: reply
     });
 
-    res.json({
-      result: reply,
-      credits: user.credits
-    });
+    res.json({ result: reply });
 
   } catch (err) {
-    console.log("AI ERROR:", err);
+    console.log(err);
     res.status(500).json({ error: "AI failed" });
   }
 });
 
-// ===== IMAGE =====
+// ===== IMAGE (UNLIMITED) =====
 app.post("/generate-image", auth, async (req, res) => {
   try {
-    const user = await User.findOne({ email: req.user.email });
+    const prompt = req.body.prompt;
 
-    if (!user.premium) {
-      return res.json({ error: "🔒 Premium only feature" });
-    }
+    if (!prompt) return res.json({ error: "Prompt empty" });
 
-    if (!req.body.prompt) {
-      return res.json({ error: "Prompt required" });
-    }
-
-    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
     res.json({ image });
 
@@ -183,26 +121,16 @@ app.post("/generate-image", auth, async (req, res) => {
 
 // ===== HISTORY =====
 app.get("/history", auth, async (req, res) => {
-  try {
-    const data = await Prompt.find({ email: req.user.email })
-      .sort({ createdAt: -1 })
-      .limit(20);
+  const data = await Prompt.find({ email: req.user.email })
+    .sort({ createdAt: -1 })
+    .limit(20);
 
-    res.json(data);
-
-  } catch {
-    res.status(500).json({ error: "History failed" });
-  }
+  res.json(data);
 });
 
-// ===== ADMIN (NEW) =====
-app.get("/admin", async (req, res) => {
-  const users = await User.find();
-
-  res.json({
-    totalUsers: users.length,
-    users
-  });
+// ===== PAYMENT (OPTIONAL) =====
+app.post("/verify-payment", auth, async (req, res) => {
+  res.json({ message: "✅ Payment received (manual mode)" });
 });
 
 // ===== START =====
