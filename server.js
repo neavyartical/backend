@@ -1,118 +1,67 @@
 const express = require("express");
-const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const cors = require("cors");
-
-
-const fetch = (...args) =>
-  import("node-fetch").then(({ default: fetch }) => fetch(...args));
-
+const fetch = require("node-fetch");
+const jwt = require("jsonwebtoken");
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
+const PORT = 3000;
 
-const JWT_SECRET = process.env.JWT_SECRET || "secret123";
-const MONGO_URI = process.env.MONGO_URI;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+// 🔐 SIMPLE MEMORY DB (upgrade later to MongoDB)
+let users = [];
 
+// 🔑 SECRET
+const SECRET = "reelmind_secret";
 
-if (!MONGO_URI) {
-  console.log("❌ MONGO_URI missing — server will not start");
-  process.exit(1);
+// ================= LOGIN =================
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+
+  let user = users.find(u => u.email === email);
+
+  if (!user) {
+    user = { email, password, premium: false, balance: 0 };
+    users.push(user);
+  }
+
+  if (user.password !== password) {
+    return res.json({ error: "Wrong password" });
+  }
+
+  const token = jwt.sign({ email }, SECRET);
+
+  res.json({ token });
+});
+
+// ================= VERIFY TOKEN =================
+function auth(req, res, next) {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) return res.status(401).send("No token");
+
+  try {
+    const decoded = jwt.verify(token, SECRET);
+    req.user = decoded;
+    next();
+  } catch {
+    res.status(401).send("Invalid token");
+  }
 }
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ DB Connected"))
-  .catch(err => console.log("❌ DB Error:", err.message));
-
-// ================= MODELS =================
-const User = mongoose.model("User", {
-  email: String,
-  password: String
-});
-
-const Project = mongoose.model("Project", {
-  userId: String,
-  content: String,
-  type: String
-});
-
-// ================= ROUTES =================
-
-// TEST ROUTE
-app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend is running");
-});
-
-// REGISTER
-app.post("/register", async (req, res) => {
+// ================= TEXT (OPENROUTER) =================
+app.post("/generate-text", auth, async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ error: "User already exists" });
-    }
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
-      email,
-      password: hashed
-    });
-
-    res.json({ message: "User created", user });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// LOGIN
-app.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: "Invalid password" });
-
-    const token = jwt.sign({ id: user._id }, JWT_SECRET);
-
-    res.json({ token });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// AI TEXT (OpenRouter)
-app.post("/generate-text", async (req, res) => {
-  try {
-    const { prompt } = req.body;
-
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
-    }
-
-    if (!OPENROUTER_API_KEY) {
-      return res.status(500).json({ error: "Missing OpenRouter API key" });
-    }
-
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        "Authorization": "Bearer YOUR_OPENROUTER_API_KEY",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "openai/gpt-3.5-turbo",
-        messages: [{ role: "user", content: prompt }]
+        messages: [{ role: "user", content: req.body.prompt }]
       })
     });
 
@@ -120,31 +69,42 @@ app.post("/generate-text", async (req, res) => {
     res.json(data);
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Text generation failed" });
   }
 });
 
-// SAVE PROJECT
-app.post("/save", async (req, res) => {
-  try {
-    const { userId, content, type } = req.body;
+// ================= IMAGE (POLLINATIONS) =================
+app.post("/generate-image", auth, async (req, res) => {
+  const prompt = req.body.prompt;
 
-    const project = await Project.create({
-      userId,
-      content,
-      type
-    });
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
-    res.json(project);
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ image: imageUrl });
 });
 
-// ================= START =================
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log("🚀 Server running on port " + PORT);
+// ================= VIDEO (RUNWAY PLACEHOLDER) =================
+app.post("/generate-video", auth, async (req, res) => {
+  res.json({
+    video: "Runway integration coming soon"
+  });
 });
+
+// ================= PAYMENT (FAKE FOR NOW) =================
+app.post("/subscribe", auth, (req, res) => {
+  const user = users.find(u => u.email === req.user.email);
+  user.premium = true;
+  res.json({ success: true });
+});
+
+// ================= USER DASHBOARD =================
+app.get("/dashboard", auth, (req, res) => {
+  const user = users.find(u => u.email === req.user.email);
+
+  res.json({
+    email: user.email,
+    premium: user.premium,
+    balance: user.balance
+  });
+});
+
+app.listen(PORT, () => console.log("Server running on " + PORT));
