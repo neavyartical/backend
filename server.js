@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 const fetch = require("node-fetch");
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 // ===== CONFIG =====
@@ -42,39 +42,52 @@ app.get("/", (req, res) => {
 // ===== AUTH =====
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
+
   if (!token) return res.status(401).json({ error: "No token" });
 
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
-  } catch {
+  } catch (err) {
+    console.log("JWT ERROR:", err.message);
     return res.status(401).json({ error: "Invalid token" });
   }
 }
 
 // ===== LOGIN =====
 app.post("/login", async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  if (!email) return res.json({ error: "Email required" });
+    if (!email) return res.json({ error: "Email required" });
 
-  let user = await User.findOne({ email });
-  if (!user) user = await User.create({ email });
+    let user = await User.findOne({ email });
+    if (!user) user = await User.create({ email });
 
-  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
 
-  res.json({ token, user });
+    res.json({ token, user });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Login failed" });
+  }
 });
 
 // ===== VERIFY PAYMENT =====
 app.post("/verify-payment", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
+  try {
+    const user = await User.findOne({ email: req.user.email });
 
-  user.premium = true;
-  user.credits += 100;
-  await user.save();
+    user.premium = true;
+    user.credits += 100;
+    await user.save();
 
-  res.json({ message: "✅ Premium Activated", user });
+    res.json({ message: "✅ Premium Activated", user });
+
+  } catch {
+    res.status(500).json({ error: "Payment verification failed" });
+  }
 });
 
 // ===== DASHBOARD =====
@@ -83,15 +96,22 @@ app.get("/dashboard", auth, async (req, res) => {
   res.json(user);
 });
 
-// ===== TEXT AI =====
+// ===== TEXT AI (UPGRADED) =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
 
     if (!user) return res.json({ error: "User not found" });
 
-    if (!user.premium && user.credits <= 0)
+    const prompt = req.body.prompt;
+
+    if (!prompt || prompt.trim() === "") {
+      return res.json({ error: "Prompt is empty" });
+    }
+
+    if (!user.premium && user.credits <= 0) {
       return res.json({ error: "No credits left" });
+    }
 
     if (!user.premium) {
       user.credits -= 1;
@@ -105,44 +125,84 @@ app.post("/generate-text", auth, async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
-        messages: [{ role: "user", content: req.body.prompt }]
+        model: "openai/gpt-3.5-turbo", // ⚡ faster & stable
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
-    const reply = data?.choices?.[0]?.message?.content || "No response";
+    console.log("AI RAW:", data);
+
+    const reply =
+      data?.choices?.[0]?.message?.content ||
+      data?.choices?.[0]?.text ||
+      null;
+
+    if (!reply) {
+      return res.json({ error: "AI returned no response" });
+    }
 
     await Prompt.create({
       email: req.user.email,
-      prompt: req.body.prompt,
+      prompt,
       result: reply
     });
 
-    res.json({ result: reply, credits: user.credits });
+    res.json({
+      result: reply,
+      credits: user.credits
+    });
 
   } catch (err) {
-    console.log(err);
+    console.log("AI ERROR:", err);
     res.status(500).json({ error: "AI failed" });
   }
 });
 
 // ===== IMAGE =====
 app.post("/generate-image", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
+  try {
+    const user = await User.findOne({ email: req.user.email });
 
-  if (!user.premium)
-    return res.json({ error: "🔒 Premium only feature" });
+    if (!user.premium) {
+      return res.json({ error: "🔒 Premium only feature" });
+    }
 
-  const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+    if (!req.body.prompt) {
+      return res.json({ error: "Prompt required" });
+    }
 
-  res.json({ image });
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
+
+    res.json({ image });
+
+  } catch {
+    res.status(500).json({ error: "Image failed" });
+  }
 });
 
 // ===== HISTORY =====
 app.get("/history", auth, async (req, res) => {
-  const data = await Prompt.find({ email: req.user.email }).sort({ createdAt: -1 });
-  res.json(data);
+  try {
+    const data = await Prompt.find({ email: req.user.email })
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    res.json(data);
+
+  } catch {
+    res.status(500).json({ error: "History failed" });
+  }
+});
+
+// ===== ADMIN (NEW) =====
+app.get("/admin", async (req, res) => {
+  const users = await User.find();
+
+  res.json({
+    totalUsers: users.length,
+    users
+  });
 });
 
 // ===== START =====
