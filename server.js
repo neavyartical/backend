@@ -7,7 +7,6 @@ const fetch = require("node-fetch");
 
 const app = express();
 
-// ===== MIDDLEWARE =====
 app.use(cors());
 app.use(express.json());
 
@@ -19,13 +18,12 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.log("❌ MongoDB error:", err));
+  .catch(err => console.log("❌ DB error:", err));
 
 // ===== MODELS =====
 const User = mongoose.model("User", new mongoose.Schema({
   email: String,
-  credits: { type: Number, default: 20 },
-  createdAt: { type: Date, default: Date.now }
+  credits: { type: Number, default: 20 }
 }));
 
 const Prompt = mongoose.model("Prompt", new mongoose.Schema({
@@ -43,12 +41,10 @@ app.get("/", (req, res) => {
 // ===== AUTH =====
 function auth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
-
   if (!token) return res.status(401).json({ error: "No token" });
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
     return res.status(401).json({ error: "Invalid token" });
@@ -57,22 +53,17 @@ function auth(req, res, next) {
 
 // ===== LOGIN =====
 app.post("/login", async (req, res) => {
-  try {
-    const { email } = req.body;
+  const { email } = req.body;
 
-    let user = await User.findOne({ email });
-    if (!user) user = await User.create({ email });
+  let user = await User.findOne({ email });
+  if (!user) user = await User.create({ email });
 
-    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
+  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
 
-    res.json({ token, user });
-
-  } catch (err) {
-    res.status(500).json({ error: "Login failed" });
-  }
+  res.json({ token, user });
 });
 
-// ===== GENERATE TEXT =====
+// ===== TEXT (FAST MODEL) =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
@@ -87,20 +78,19 @@ app.post("/generate-text", auth, async (req, res) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "HTTP-Referer": "https://reelmind.ai",
+        "X-Title": "ReelMind AI",
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-3.5-turbo",
-        messages: [
-          { role: "user", content: req.body.prompt }
-        ]
+        model: "google/gemini-2.0-flash-001", // ⚡ FAST MODEL
+        messages: [{ role: "user", content: req.body.prompt }]
       })
     });
 
     const data = await response.json();
     const reply = data?.choices?.[0]?.message?.content || "No response";
 
-    // SAVE HISTORY
     await Prompt.create({
       email: req.user.email,
       prompt: req.body.prompt,
@@ -113,11 +103,12 @@ app.post("/generate-text", auth, async (req, res) => {
     });
 
   } catch (err) {
+    console.log(err);
     res.status(500).json({ error: "AI failed" });
   }
 });
 
-// ===== GENERATE IMAGE =====
+// ===== IMAGE =====
 app.post("/generate-image", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
@@ -130,17 +121,14 @@ app.post("/generate-image", auth, async (req, res) => {
 
     const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
 
-    res.json({
-      image,
-      credits: user.credits
-    });
+    res.json({ image, credits: user.credits });
 
   } catch {
     res.status(500).json({ error: "Image failed" });
   }
 });
 
-// ===== GET HISTORY =====
+// ===== HISTORY =====
 app.get("/history", auth, async (req, res) => {
   const data = await Prompt.find({ email: req.user.email }).sort({ createdAt: -1 });
   res.json(data);
