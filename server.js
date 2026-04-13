@@ -8,7 +8,6 @@ const cors = require("cors");
 const fetch = (...args) =>
   import("node-fetch").then(({ default: fetch }) => fetch(...args));
 
-// ================= INIT =================
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -19,9 +18,11 @@ const MONGO_URI = process.env.MONGO_URI;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // ================= DB =================
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ DB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
+if (MONGO_URI) {
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ DB Connected"))
+    .catch(err => console.log("❌ DB Error:", err));
+}
 
 // ================= MODELS =================
 const User = mongoose.model("User", {
@@ -49,6 +50,11 @@ function auth(req, res, next) {
   }
 }
 
+// ================= ROOT =================
+app.get("/", (req, res) => {
+  res.send("🚀 ReelMind AI Backend Running");
+});
+
 // ================= REGISTER =================
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
@@ -70,14 +76,15 @@ app.post("/login", async (req, res) => {
   if (!valid) return res.json({ msg: "Wrong password" });
 
   const token = jwt.sign({ id: user._id }, JWT_SECRET);
+
   res.json({ token });
 });
 
-// ================= AI TEXT =================
+// ================= TEXT AI =================
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
-  if (!prompt) return res.json({ result: "Enter something" });
+  if (!prompt) return res.json({ result: "Enter prompt" });
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -87,11 +94,11 @@ app.post("/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
+        model: "openai/gpt-3.5-turbo",
         messages: [
           {
             role: "system",
-            content: "You are ReelMind AI. Answer clearly and intelligently."
+            content: "You are ReelMind AI. Generate viral content."
           },
           {
             role: "user",
@@ -102,52 +109,27 @@ app.post("/generate", async (req, res) => {
     });
 
     const data = await response.json();
-    console.log("AI RESPONSE:", data);
-
-    if (data.error) {
-      return res.json({ result: "AI Error: " + data.error.message });
-    }
-
-    const result =
-      data?.choices?.[0]?.message?.content || "No response from AI";
-
-    res.json({ result });
-
-  } catch (err) {
-    console.log(err);
-    res.json({ result: "Server error" });
-  }
-});
-
-// ================= IMAGE =================
-app.post("/image", async (req, res) => {
-  const { prompt } = req.body;
-
-  if (!prompt) return res.json({ error: "No prompt" });
-
-  try {
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
     res.json({
-      image: imageUrl
+      result: data.choices?.[0]?.message?.content || "No response"
     });
 
   } catch (err) {
     console.log(err);
-    res.json({ error: "Image failed" });
+    res.json({ result: "Error generating text" });
   }
 });
 
-// ================= VIDEO =================
-app.post("/video-edit", async (req, res) => {
+// ================= IMAGE =================
+app.post("/image", (req, res) => {
   const { prompt } = req.body;
 
-  res.json({
-    edit: "AI edited video based on: " + prompt
-  });
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+  res.json({ image: url });
 });
 
-// ================= SAVE =================
+// ================= SAVE PROJECT =================
 app.post("/save", auth, async (req, res) => {
   const { content, type } = req.body;
 
@@ -160,54 +142,20 @@ app.post("/save", auth, async (req, res) => {
   res.json({ msg: "Saved" });
 });
 
-// ================= LOAD =================
+// ================= GET PROJECTS =================
 app.get("/projects", auth, async (req, res) => {
   const projects = await Project.find({ userId: req.userId });
   res.json(projects);
 });
 
-// ================= ADMIN =================
-app.get("/admin", async (req, res) => {
-  const users = await User.countDocuments();
-  const projects = await Project.countDocuments();
-
-  res.json({
-    users,
-    projects,
-    note: "Revenue tracked via external dashboard"
-  });
-});
-
-// ================= ADS =================
-app.get("/ads.txt", (req, res) => {
-  res.send("google.com, pub-1714638410489429, DIRECT, f08c47fec0942fa0");
-});
-
-// ================= REQUIRED PAGES =================
-app.get("/privacy", (req, res) => {
-  res.send("<h1>Privacy Policy</h1><p>Your data is safe.</p>");
-});
-
-app.get("/about", (req, res) => {
-  res.send("<h1>About</h1><p>ReelMind AI by Artical Neavy</p>");
-});
-
-app.get("/contact", (req, res) => {
-  res.send("<h1>Contact</h1><p>Email: support@reelmind.ai</p>");
-});
-
-app.get("/blog", (req, res) => {
-  res.send("<h1>Blog</h1><p>AI content and updates.</p>");
-});
-
-// ================= ROOT =================
-app.get("/", (req, res) => {
-  res.send("🚀 ReelMind AI Backend Running");
+// ================= TEST =================
+app.get("/test", (req, res) => {
+  res.json({ status: "Backend working ✅" });
 });
 
 // ================= START =================
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Server running on port " + PORT);
+  console.log("✅ Server running on port " + PORT);
 });
