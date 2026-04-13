@@ -6,24 +6,25 @@ const jwt = require("jsonwebtoken");
 const fetch = require("node-fetch");
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
 
 // ===== CONFIG =====
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || "fallbacksecret";
+const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.log("❌ DB error:", err));
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.log("❌ DB Error:", err.message));
 
 // ===== MODELS =====
 const User = mongoose.model("User", new mongoose.Schema({
-  email: String,
-  credits: { type: Number, default: 20 }
+  email: { type: String, unique: true },
+  credits: { type: Number, default: 20 },
+  premium: { type: Boolean, default: false },
+  earnings: { type: Number, default: 0 }
 }));
 
 const Prompt = mongoose.model("Prompt", new mongoose.Schema({
@@ -55,6 +56,8 @@ function auth(req, res, next) {
 app.post("/login", async (req, res) => {
   const { email } = req.body;
 
+  if (!email) return res.json({ error: "Email required" });
+
   let user = await User.findOne({ email });
   if (!user) user = await User.create({ email });
 
@@ -63,27 +66,46 @@ app.post("/login", async (req, res) => {
   res.json({ token, user });
 });
 
-// ===== TEXT (FAST MODEL) =====
+// ===== VERIFY PAYMENT =====
+app.post("/verify-payment", auth, async (req, res) => {
+  const user = await User.findOne({ email: req.user.email });
+
+  user.premium = true;
+  user.credits += 100;
+  await user.save();
+
+  res.json({ message: "✅ Premium Activated", user });
+});
+
+// ===== DASHBOARD =====
+app.get("/dashboard", auth, async (req, res) => {
+  const user = await User.findOne({ email: req.user.email });
+  res.json(user);
+});
+
+// ===== TEXT AI =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
 
     if (!user) return res.json({ error: "User not found" });
-    if (user.credits <= 0) return res.json({ error: "No credits left" });
 
-    user.credits -= 1;
-    await user.save();
+    if (!user.premium && user.credits <= 0)
+      return res.json({ error: "No credits left" });
+
+    if (!user.premium) {
+      user.credits -= 1;
+      await user.save();
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-        "HTTP-Referer": "https://reelmind.ai",
-        "X-Title": "ReelMind AI",
+        "Authorization": "Bearer " + OPENROUTER_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001", // ⚡ FAST MODEL
+        model: "google/gemini-2.0-flash-001",
         messages: [{ role: "user", content: req.body.prompt }]
       })
     });
@@ -97,10 +119,7 @@ app.post("/generate-text", auth, async (req, res) => {
       result: reply
     });
 
-    res.json({
-      result: reply,
-      credits: user.credits
-    });
+    res.json({ result: reply, credits: user.credits });
 
   } catch (err) {
     console.log(err);
@@ -110,22 +129,14 @@ app.post("/generate-text", auth, async (req, res) => {
 
 // ===== IMAGE =====
 app.post("/generate-image", auth, async (req, res) => {
-  try {
-    const user = await User.findOne({ email: req.user.email });
+  const user = await User.findOne({ email: req.user.email });
 
-    if (!user) return res.json({ error: "User not found" });
-    if (user.credits <= 0) return res.json({ error: "No credits left" });
+  if (!user.premium)
+    return res.json({ error: "🔒 Premium only feature" });
 
-    user.credits -= 1;
-    await user.save();
+  const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
 
-    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
-
-    res.json({ image, credits: user.credits });
-
-  } catch {
-    res.status(500).json({ error: "Image failed" });
-  }
+  res.json({ image });
 });
 
 // ===== HISTORY =====
@@ -136,5 +147,5 @@ app.get("/history", auth, async (req, res) => {
 
 // ===== START =====
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port", PORT);
+  console.log("🚀 Server running on port " + PORT);
 });
