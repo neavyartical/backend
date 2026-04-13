@@ -25,7 +25,7 @@ mongoose.connect(process.env.MONGO_URI)
 // ===== USER MODEL =====
 const User = mongoose.model("User", new mongoose.Schema({
   email: { type: String, unique: true },
-  credits: { type: Number, default: 20 },
+  credits: { type: Number, default: 50 },
   premium: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 }));
@@ -49,27 +49,26 @@ function auth(req, res, next) {
   }
 }
 
-// ===== LOGIN / REGISTER =====
+// ===== LOGIN =====
 app.post("/login", async (req, res) => {
-  const { email } = req.body;
+  try {
+    const { email } = req.body;
 
-  if (!email) return res.status(400).json({ error: "Email required" });
+    if (!email) return res.status(400).json({ error: "Email required" });
 
-  let user = await User.findOne({ email });
+    let user = await User.findOne({ email });
 
-  if (!user) {
-    user = await User.create({ email });
+    if (!user) {
+      user = await User.create({ email });
+    }
+
+    const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "30d" });
+
+    res.json({ token, user });
+
+  } catch (err) {
+    res.status(500).json({ error: "Login failed" });
   }
-
-  const token = jwt.sign({ email }, JWT_SECRET, { expiresIn: "7d" });
-
-  res.json({ token, user });
-});
-
-// ===== DASHBOARD =====
-app.get("/dashboard", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-  res.json(user);
 });
 
 // ===== CREDIT SYSTEM =====
@@ -84,7 +83,7 @@ async function useCredit(user) {
   return true;
 }
 
-// ===== AI TEXT =====
+// ===== TEXT AI =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.user.email });
@@ -108,8 +107,7 @@ app.post("/generate-text", auth, async (req, res) => {
 
     const data = await response.json();
 
-    const reply =
-      data?.choices?.[0]?.message?.content || "AI failed";
+    const reply = data?.choices?.[0]?.message?.content || "No response";
 
     res.json({
       result: reply,
@@ -118,7 +116,7 @@ app.post("/generate-text", auth, async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json({ error: "AI generation failed" });
+    res.status(500).json({ error: "Text generation failed" });
   }
 });
 
@@ -140,7 +138,7 @@ app.post("/generate-image", auth, async (req, res) => {
     });
 
   } catch {
-    res.status(500).json({ error: "Image failed" });
+    res.status(500).json({ error: "Image generation failed" });
   }
 });
 
@@ -164,15 +162,14 @@ app.post("/viral-reel", auth, async (req, res) => {
         model: "openai/gpt-3.5-turbo",
         messages: [{
           role: "user",
-          content: "Create a viral TikTok reel: " + req.body.prompt
+          content: "Create a viral TikTok reel script: " + req.body.prompt
         }]
       })
     });
 
     const data = await response.json();
 
-    const reply =
-      data?.choices?.[0]?.message?.content || "Reel failed";
+    const reply = data?.choices?.[0]?.message?.content || "No response";
 
     res.json({
       result: reply,
@@ -180,18 +177,18 @@ app.post("/viral-reel", auth, async (req, res) => {
     });
 
   } catch {
-    res.status(500).json({ error: "Reel failed" });
+    res.status(500).json({ error: "Reel generation failed" });
   }
 });
 
-// ===== PAYMENT (KO-FI LINK) =====
+// ===== PAYMENT (KO-FI) =====
 app.get("/pay", (req, res) => {
   res.json({
     url: "https://ko-fi.com/articalneavy"
   });
 });
 
-// ===== START =====
+// ===== START SERVER =====
 app.listen(PORT, () => {
   console.log("🚀 Server running on port " + PORT);
 });
