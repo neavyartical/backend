@@ -11,8 +11,11 @@ app.use(express.json());
 
 // ===== CONFIG =====
 const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
+const JWT_SECRET = process.env.JWT_SECRET;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+
+// 👑 ADMIN
+const ADMIN_EMAIL = "neavyartical@gmail.com";
 
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
@@ -22,6 +25,8 @@ mongoose.connect(process.env.MONGO_URI)
 // ===== MODELS =====
 const User = mongoose.model("User", new mongoose.Schema({
   email: { type: String, unique: true },
+  credits: { type: Number, default: 20 },
+  premium: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 }));
 
@@ -64,12 +69,22 @@ app.post("/login", async (req, res) => {
   res.json({ token, user });
 });
 
-// ===== TEXT AI (UNLIMITED) =====
+// ===== TEXT AI =====
 app.post("/generate-text", auth, async (req, res) => {
   try {
+    const user = await User.findOne({ email: req.user.email });
     const prompt = req.body.prompt;
 
     if (!prompt) return res.json({ error: "Prompt empty" });
+
+    // 🔐 CREDIT SYSTEM (except admin)
+    if (req.user.email !== ADMIN_EMAIL && !user.premium) {
+      if (user.credits <= 0) {
+        return res.json({ error: "No credits left" });
+      }
+      user.credits--;
+      await user.save();
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -85,9 +100,7 @@ app.post("/generate-text", auth, async (req, res) => {
 
     const data = await response.json();
 
-    const reply =
-      data?.choices?.[0]?.message?.content ||
-      "No response";
+    const reply = data?.choices?.[0]?.message?.content || "No response";
 
     await Prompt.create({
       email: req.user.email,
@@ -95,7 +108,10 @@ app.post("/generate-text", auth, async (req, res) => {
       result: reply
     });
 
-    res.json({ result: reply });
+    res.json({
+      result: reply,
+      credits: user.credits
+    });
 
   } catch (err) {
     console.log(err);
@@ -103,18 +119,31 @@ app.post("/generate-text", auth, async (req, res) => {
   }
 });
 
-// ===== IMAGE (UNLIMITED) =====
+// ===== IMAGE AI (REAL FIXED) =====
 app.post("/generate-image", auth, async (req, res) => {
   try {
+    const user = await User.findOne({ email: req.user.email });
     const prompt = req.body.prompt;
 
     if (!prompt) return res.json({ error: "Prompt empty" });
 
-    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+    if (req.user.email !== ADMIN_EMAIL && !user.premium) {
+      if (user.credits <= 0) {
+        return res.json({ error: "No credits left" });
+      }
+      user.credits--;
+      await user.save();
+    }
 
-    res.json({ image });
+    const image = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&seed=${Math.random()*100000}`;
 
-  } catch {
+    res.json({
+      image,
+      credits: user.credits
+    });
+
+  } catch (err) {
+    console.log(err);
     res.status(500).json({ error: "Image failed" });
   }
 });
@@ -128,9 +157,15 @@ app.get("/history", auth, async (req, res) => {
   res.json(data);
 });
 
-// ===== PAYMENT (OPTIONAL) =====
+// ===== PAYMENT (MANUAL KOFI CONFIRM) =====
 app.post("/verify-payment", auth, async (req, res) => {
-  res.json({ message: "✅ Payment received (manual mode)" });
+  const user = await User.findOne({ email: req.user.email });
+
+  user.premium = true;
+  user.credits += 100;
+  await user.save();
+
+  res.json({ message: "✅ Premium Activated" });
 });
 
 // ===== START =====
