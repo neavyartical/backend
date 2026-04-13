@@ -7,8 +7,6 @@ const Stripe = require("stripe");
 require("dotenv").config();
 
 const app = express();
-
-// ===== MIDDLEWARE =====
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
@@ -16,10 +14,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 10000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const STRIPE_SECRET = process.env.STRIPE_SECRET;
-const RUNWAY_API_KEY = process.env.RUNWAY_API_KEY;
-
-const stripe = new Stripe(STRIPE_SECRET);
+const stripe = new Stripe(process.env.STRIPE_SECRET);
 
 // ===== DATABASE =====
 mongoose.connect(process.env.MONGO_URI)
@@ -53,18 +48,14 @@ app.get("/", (req, res) => {
   res.send("🚀 ReelMind AI Backend LIVE");
 });
 
-// ===== LOGIN / REGISTER =====
+// ===== LOGIN =====
 app.post("/login", async (req, res) => {
   const { email } = req.body;
 
   let user = await User.findOne({ email });
-
-  if (!user) {
-    user = await User.create({ email });
-  }
+  if (!user) user = await User.create({ email });
 
   const token = jwt.sign({ email }, JWT_SECRET);
-
   res.json({ token, user });
 });
 
@@ -74,7 +65,7 @@ app.get("/dashboard", auth, async (req, res) => {
   res.json(user);
 });
 
-// ===== CREDIT CHECK =====
+// ===== CREDIT SYSTEM =====
 async function useCredit(user) {
   if (!user.premium && user.credits <= 0) return false;
 
@@ -82,18 +73,16 @@ async function useCredit(user) {
     user.credits--;
     await user.save();
   }
-
   return true;
 }
 
-// ===== AI TEXT =====
+// ===== TEXT AI =====
 app.post("/generate-text", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-
-  if (!(await useCredit(user)))
-    return res.json({ error: "No credits left" });
-
   try {
+    const user = await User.findOne({ email: req.user.email });
+    if (!(await useCredit(user)))
+      return res.json({ error: "No credits left" });
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -114,11 +103,11 @@ app.post("/generate-text", auth, async (req, res) => {
     });
 
   } catch (err) {
-    res.status(500).json({ error: "AI generation failed" });
+    res.status(500).json({ error: "AI failed" });
   }
 });
 
-// ===== IMAGE (POLLINATIONS) =====
+// ===== IMAGE =====
 app.post("/generate-image", auth, async (req, res) => {
   const user = await User.findOne({ email: req.user.email });
 
@@ -130,14 +119,14 @@ app.post("/generate-image", auth, async (req, res) => {
   res.json({ image, credits: user.credits });
 });
 
-// ===== VIRAL REEL =====
+// ===== REEL =====
 app.post("/viral-reel", auth, async (req, res) => {
-  const user = await User.findOne({ email: req.user.email });
-
-  if (!(await useCredit(user)))
-    return res.json({ error: "No credits left" });
-
   try {
+    const user = await User.findOne({ email: req.user.email });
+
+    if (!(await useCredit(user)))
+      return res.json({ error: "No credits left" });
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -148,7 +137,7 @@ app.post("/viral-reel", auth, async (req, res) => {
         model: "openai/gpt-3.5-turbo",
         messages: [{
           role: "user",
-          content: "Create a viral TikTok reel script with hook, scenes, captions and hashtags: " + req.body.prompt
+          content: "Create viral TikTok reel script: " + req.body.prompt
         }]
       })
     });
@@ -156,26 +145,12 @@ app.post("/viral-reel", auth, async (req, res) => {
     const data = await response.json();
 
     res.json({
-      result: data?.choices?.[0]?.message?.content || "No reel generated",
+      result: data?.choices?.[0]?.message?.content || "No response",
       credits: user.credits
     });
 
   } catch {
-    res.status(500).json({ error: "Reel generation failed" });
-  }
-});
-
-// ===== VIDEO (RUNWAY READY) =====
-app.post("/generate-video", auth, async (req, res) => {
-  try {
-    // ⚠️ Replace with real Runway endpoint when ready
-    res.json({
-      status: "ready",
-      message: "Runway integration endpoint placeholder",
-      prompt: req.body.prompt
-    });
-  } catch {
-    res.status(500).json({ error: "Video failed" });
+    res.status(500).json({ error: "Reel failed" });
   }
 });
 
@@ -187,20 +162,20 @@ app.post("/pay", auth, async (req, res) => {
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: { name: "ReelMind Premium Upgrade" },
+          product_data: { name: "ReelMind Premium" },
           unit_amount: 999
         },
         quantity: 1
       }],
       mode: "payment",
-      success_url: "https://your-site.com/success",
-      cancel_url: "https://your-site.com/cancel"
+      success_url: "https://your-site.com",
+      cancel_url: "https://your-site.com"
     });
 
     res.json({ url: session.url });
 
   } catch {
-    res.status(500).json({ error: "Stripe failed" });
+    res.status(500).json({ error: "Payment failed" });
   }
 });
 
@@ -208,17 +183,6 @@ app.post("/pay", auth, async (req, res) => {
 app.get("/paypal", (req, res) => {
   res.json({
     url: "https://www.paypal.com/paypalme/YOURNAME/10"
-  });
-});
-
-// ===== ADMIN =====
-app.get("/admin", async (req, res) => {
-  const users = await User.find();
-
-  res.json({
-    totalUsers: users.length,
-    totalRevenue: users.reduce((sum, u) => sum + u.earnings, 0),
-    users
   });
 });
 
