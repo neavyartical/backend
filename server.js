@@ -14,7 +14,7 @@ const fetch = require("node-fetch");
 const admin = require("firebase-admin");
 
 // =========================
-// 🔥 FIREBASE ADMIN INIT (FINAL FIX)
+// 🔥 FIREBASE ADMIN (ENV ONLY - CLEAN)
 // =========================
 let serviceAccount;
 
@@ -67,7 +67,7 @@ const upload = multer({ dest: "uploads/" });
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // =========================
-// 🔐 AUTH (FINAL CLEAN VERSION)
+// 🔐 AUTH (FIXED)
 // =========================
 const auth = async (req, res, next) => {
   try {
@@ -83,7 +83,7 @@ const auth = async (req, res, next) => {
 
     req.user = decoded;
 
-    console.log("✅ AUTH OK:", decoded.uid);
+    console.log("✅ AUTH:", decoded.uid);
 
     next();
 
@@ -91,8 +91,7 @@ const auth = async (req, res, next) => {
     console.error("❌ TOKEN ERROR:", err.message);
 
     return res.status(401).json({
-      error: "Invalid token",
-      details: err.message
+      error: "Invalid token"
     });
   }
 };
@@ -128,14 +127,7 @@ const UserSchema = new mongoose.Schema({
   credits: { type: Number, default: 5 }
 });
 
-const PostSchema = new mongoose.Schema({
-  content: String,
-  type: String,
-  createdAt: { type: Date, default: Date.now }
-});
-
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
-const Post = mongoose.models.Post || mongoose.model("Post", PostSchema);
 
 // =========================
 // 👤 PROFILE
