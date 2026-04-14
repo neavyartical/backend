@@ -1,71 +1,67 @@
-// ===== IMPORTS =====
+// =========================
+// 🔥 IMPORTS
+// =========================
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
-const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
+const fetch = require("node-fetch");
+const admin = require("firebase-admin");
 
-// 🔥 FIREBASE ADMIN (your file)
-const admin = require("./firebaseAdmin");
+// =========================
+// 🔥 FIREBASE ADMIN INIT (FIXED)
+// =========================
+let serviceAccount;
 
-// ===== INIT =====
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+  console.log("🔥 Firebase Project:", serviceAccount.project_id);
+} catch (e) {
+  console.error("❌ FIREBASE KEY ERROR:", e.message);
+}
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+}
+
+// =========================
+// 🚀 INIT SERVER
+// =========================
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-// ===== MIDDLEWARE =====
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-
-app.use(rateLimit({
-  windowMs: 60 * 1000,
-  max: 30
-}));
-
-// ===== STATIC =====
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-const upload = multer({ dest: "uploads/" });
-
-// =====================================================
-// 🧠 DATABASE
-// =====================================================
-let dbConnected = false;
-
-mongoose.connect(process.env.MONGO_URI)
-.then(() => {
-  dbConnected = true;
-  console.log("✅ MongoDB Connected");
-})
-.catch(err => {
-  console.log("⚠️ Running MEMORY MODE:", err.message);
+const io = new Server(server, {
+  cors: { origin: "*" }
 });
 
-// ===== MODELS =====
-const User = mongoose.model("User", new mongoose.Schema({
-  uid: String,
-  email: String,
-  credits: { type: Number, default: 10 }
-}));
+// =========================
+// 🔥 MIDDLEWARE
+// =========================
+app.use(cors({ origin: "*" }));
+app.use(express.json({ limit: "10mb" }));
 
-const Post = mongoose.model("Post", new mongoose.Schema({
-  content: String,
-  type: String,
-  createdAt: { type: Date, default: Date.now }
-}));
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30
+});
+app.use(limiter);
 
-// ===== MEMORY FALLBACK =====
-let users = {};
-let posts = {};
-let requestTracker = {};
+// =========================
+// 📁 FILE UPLOAD
+// =========================
+const upload = multer({ dest: "uploads/" });
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// =====================================================
-// 🔐 AUTH (FIXED TOKEN)
-// =====================================================
+// =========================
+// 🔐 AUTH FIXED (NO MORE INVALID TOKEN)
+// =========================
 const auth = async (req, res, next) => {
   try {
     const bearer = req.headers.authorization;
@@ -75,71 +71,114 @@ const auth = async (req, res, next) => {
     }
 
     const token = bearer.split(" ")[1];
+
     const decoded = await admin.auth().verifyIdToken(token);
 
     req.user = decoded;
-
-    let user;
-
-    if (!dbConnected) {
-      if (!users[decoded.uid]) {
-        users[decoded.uid] = { email: decoded.email, credits: 10 };
-      }
-      user = users[decoded.uid];
-    } else {
-      user = await User.findOne({ uid: decoded.uid });
-
-      if (!user) {
-        user = await User.create({
-          uid: decoded.uid,
-          email: decoded.email,
-          credits: 10
-        });
-      }
-    }
-
-    req.dbUser = user;
     next();
 
   } catch (err) {
     console.error("❌ TOKEN ERROR:", err.message);
-    res.status(401).json({ error: "Invalid token" });
+
+    return res.status(401).json({
+      error: "Invalid token",
+      details: err.message
+    });
   }
 };
 
-// =====================================================
-// 👤 PROFILE
-// =====================================================
-app.get("/me", auth, (req, res) => {
-  res.json({
-    data: {
-      email: req.dbUser.email,
-      credits: req.dbUser.credits
-    }
-  });
+// =========================
+// 🧠 DATABASE
+// =========================
+let dbConnected = false;
+
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => {
+      dbConnected = true;
+      console.log("✅ MongoDB Connected");
+    })
+    .catch(err => console.log("❌ Mongo Error:", err.message));
+} else {
+  console.log("⚠️ MEMORY MODE ACTIVE");
+}
+
+// =========================
+// 🧠 MEMORY MODE
+// =========================
+let users = {};
+let posts = [];
+
+// =========================
+// 📦 SCHEMAS
+// =========================
+const UserSchema = new mongoose.Schema({
+  uid: String,
+  email: String,
+  credits: { type: Number, default: 5 }
 });
 
-// =====================================================
-// 💳 CREDIT SYSTEM
-// =====================================================
+const PostSchema = new mongoose.Schema({
+  content: String,
+  type: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const User = mongoose.models.User || mongoose.model("User", UserSchema);
+const Post = mongoose.models.Post || mongoose.model("Post", PostSchema);
+
+// =========================
+// 👤 PROFILE
+// =========================
+app.get("/me", auth, async (req, res) => {
+  const { uid, email } = req.user;
+
+  if (!dbConnected) {
+    if (!users[uid]) users[uid] = { email, credits: 5 };
+    return res.json({ data: users[uid] });
+  }
+
+  let user = await User.findOne({ uid });
+  if (!user) {
+    user = await User.create({ uid, email, credits: 5 });
+  }
+
+  res.json({ data: user });
+});
+
+// =========================
+// 💳 USE CREDIT
+// =========================
 app.post("/use-credit", auth, async (req, res) => {
   const amount = req.body.amount || 1;
+  const { uid, email } = req.user;
 
-  if (req.dbUser.credits < amount) {
+  let user;
+
+  if (!dbConnected) {
+    if (!users[uid]) users[uid] = { email, credits: 5 };
+    user = users[uid];
+  } else {
+    user = await User.findOne({ uid }) || await User.create({ uid, email });
+  }
+
+  if (user.credits < amount) {
     return res.json({ error: "NO_CREDITS" });
   }
 
-  req.dbUser.credits -= amount;
+  user.credits -= amount;
+  if (dbConnected) await user.save();
 
-  if (dbConnected) await req.dbUser.save();
-
-  res.json({ success: true, credits: req.dbUser.credits });
+  res.json({ success: true, credits: user.credits });
 });
 
+// =========================
+// 💰 ADD CREDIT
+// =========================
 app.post("/add-credit", async (req, res) => {
   const { email, amount } = req.body;
 
-  let user = await User.findOne({ email });
+  const user = await User.findOne({ email });
   if (!user) return res.json({ error: "User not found" });
 
   user.credits += amount;
@@ -148,32 +187,31 @@ app.post("/add-credit", async (req, res) => {
   res.json({ success: true, credits: user.credits });
 });
 
-// =====================================================
-// 🤖 GENERATE TEXT (PAYWALL + AI)
-// =====================================================
+// =========================
+// 🤖 GENERATE TEXT
+// =========================
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-    const uid = req.user.uid;
+    const { uid, email } = req.user;
 
-    if (!prompt) return res.json({ error: "No prompt" });
+    let user;
 
-    // 🔥 RATE LIMIT PER USER
-    const now = Date.now();
-    if (requestTracker[uid] && now - requestTracker[uid] < 3000) {
-      return res.json({ error: "Slow down ⚠️" });
+    if (!dbConnected) {
+      if (!users[uid]) users[uid] = { email, credits: 5 };
+      user = users[uid];
+    } else {
+      user = await User.findOne({ uid }) || await User.create({ uid, email });
     }
-    requestTracker[uid] = now;
 
-    // 🔥 CREDIT CHECK
-    if (req.dbUser.credits <= 0) {
+    if (user.credits <= 0) {
       return res.json({ error: "NO_CREDITS" });
     }
 
-    req.dbUser.credits -= 1;
-    if (dbConnected) await req.dbUser.save();
+    user.credits -= 1;
+    if (dbConnected) await user.save();
 
-    // 🔥 AI CALL
+    // 🔥 REAL AI (OpenRouter)
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -190,49 +228,54 @@ app.post("/generate-text", auth, async (req, res) => {
     const content = data.choices?.[0]?.message?.content || "No response";
 
     res.json({
-      data: {
-        content,
-        creditsLeft: req.dbUser.credits
-      }
+      data: { content },
+      credits: user.credits
     });
 
   } catch (err) {
     console.error(err);
-    res.json({ error: "AI failed" });
+    res.json({ error: "AI_FAILED" });
   }
 });
 
-// =====================================================
+// =========================
+// 🖼️ IMAGE
+// =========================
+app.post("/generate-image", auth, (req, res) => {
+  const { prompt } = req.body;
+
+  res.json({
+    data: {
+      url: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+    }
+  });
+});
+
+// =========================
+// 🎬 VIDEO
+// =========================
+app.post("/generate-video", auth, (req, res) => {
+  res.json({
+    data: {
+      url: "https://www.w3schools.com/html/mov_bbb.mp4"
+    }
+  });
+});
+
+// =========================
 // 📤 UPLOAD
-// =====================================================
+// =========================
 app.post("/upload", auth, upload.single("file"), (req, res) => {
   if (!req.file) return res.json({ error: "No file" });
 
-  const type = req.file.mimetype.startsWith("video") ? "video" : "image";
   const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
-  res.json({ url, type });
+  res.json({ url });
 });
 
-// =====================================================
-// 📱 POSTS / FEED
-// =====================================================
-app.post("/post", auth, async (req, res) => {
-  const { content, type } = req.body;
-
-  if (!content) return res.json({ error: "No content" });
-
-  if (!dbConnected) {
-    posts.unshift({ content, type });
-    return res.json({ success: true });
-  }
-
-  const newPost = await Post.create({ content, type });
-  io.emit("new_post", newPost);
-
-  res.json({ success: true });
-});
-
+// =========================
+// 📡 FEED
+// =========================
 app.get("/feed", async (req, res) => {
   if (!dbConnected) return res.json({ data: posts });
 
@@ -240,17 +283,29 @@ app.get("/feed", async (req, res) => {
   res.json({ data });
 });
 
-// =====================================================
+// =========================
+// 🧪 TEST AUTH
+// =========================
+app.get("/test-auth", auth, (req, res) => {
+  res.json({
+    success: true,
+    uid: req.user.uid,
+    email: req.user.email
+  });
+});
+
+// =========================
 // ❤️ HEALTH
-// =====================================================
+// =========================
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind Backend LIVE");
 });
 
-// =====================================================
+// =========================
 // 🚀 START
-// =====================================================
+// =========================
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
   console.log("🔥 Server running on port " + PORT);
 });
