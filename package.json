@@ -1,7 +1,7 @@
 {
   "name": "reelmind-backend",
   "version": "2.0.0",
-  "description": "🚀 ReelMind AI Backend - Supersonic Production API",
+  "description": "🚀 ReelMind AI Backend - Hypersonic Production API",
   "main": "server.js",
   "type": "commonjs",
 
@@ -50,6 +50,8 @@
     "api",
     "socket.io",
     "realtime",
-    "tiktok-clone"
+    "tiktok-clone",
+    "ai-content",
+    "viral-content"
   ]
 }
