@@ -17,19 +17,27 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ===== DATABASE (TEMP MEMORY) =====
+// ===== DATABASE (TEMP MEMORY - READY FOR MONGODB) =====
 let users = {};
 let posts = [];
 let idCounter = 1;
 
-// ===== SOCKET =====
-io.on("connection", () => {
-  console.log("🟢 User connected");
+// ===== SOCKET REALTIME =====
+io.on("connection", (socket) => {
+  console.log("🟢 User connected:", socket.id);
 });
 
-// ===== LOGIN =====
+// =====================================================
+// 🔐 AUTH SYSTEM
+// =====================================================
+
+// LOGIN
 app.post("/login", (req, res) => {
   const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email required" });
+  }
 
   if (!users[email]) {
     users[email] = {
@@ -46,67 +54,87 @@ app.post("/login", (req, res) => {
   });
 });
 
-// ===== GET USER =====
+// GET USER
 app.get("/me", (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   const user = users[token];
 
-  if (!user) return res.status(401).json({ error: "Unauthorized" });
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   res.json({ data: user });
 });
 
-// ===== CREATE POST =====
+// =====================================================
+// 📱 FEED SYSTEM (TIKTOK STYLE)
+// =====================================================
+
+// CREATE POST
 app.post("/post", (req, res) => {
   const { content, type } = req.body;
+
+  if (!content || !type) {
+    return res.status(400).json({ error: "Invalid post" });
+  }
 
   const newPost = {
     id: idCounter++,
     content,
     type,
-    likes: 0
+    likes: 0,
+    createdAt: Date.now()
   };
 
   posts.unshift(newPost);
+
+  // 🔥 REALTIME PUSH
   io.emit("new_post", newPost);
 
   res.json({ success: true });
 });
 
-// ===== GET FEED =====
+// GET FEED
 app.get("/feed", (req, res) => {
   res.json({ data: posts });
 });
 
-// ===== LIKE =====
+// LIKE
 app.post("/like/:id", (req, res) => {
   const id = parseInt(req.params.id);
+
   const post = posts.find(p => p.id === id);
   if (post) post.likes++;
+
   res.json({ success: true });
 });
 
 // =====================================================
-// 🔥 REAL AI WITH MODES
+// 🤖 REAL AI SYSTEM (OPENROUTER)
 // =====================================================
 
 app.post("/generate-text", async (req, res) => {
   try {
     const { prompt, mode } = req.body;
 
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt required" });
+    }
+
+    // ===== MODES SYSTEM =====
     let systemPrompt = "";
 
-    // ===== MODES =====
-    if (mode === "story") {
-      systemPrompt = `
+    switch (mode) {
+      case "story":
+        systemPrompt = `
 Write a cinematic emotional story.
 Stay strictly on topic.
 Make it vivid and engaging.
 `;
-    }
+        break;
 
-    else if (mode === "script") {
-      systemPrompt = `
+      case "script":
+        systemPrompt = `
 Write a professional video script.
 
 Include:
@@ -114,17 +142,17 @@ Include:
 - Dialogue
 - Timing
 `;
-    }
+        break;
 
-    else if (mode === "caption") {
-      systemPrompt = `
+      case "caption":
+        systemPrompt = `
 Generate SHORT viral captions only.
 Make them punchy and catchy.
 `;
-    }
+        break;
 
-    else if (mode === "ads") {
-      systemPrompt = `
+      case "ads":
+        systemPrompt = `
 Write high-converting ad copy.
 
 Include:
@@ -132,11 +160,11 @@ Include:
 - Value
 - Call to action
 `;
-    }
+        break;
 
-    else {
-      // 🔥 DEFAULT REELS MODE
-      systemPrompt = `
+      default:
+        // 🔥 DEFAULT (REELS MODE)
+        systemPrompt = `
 Create viral TikTok content.
 
 FORMAT:
@@ -149,6 +177,7 @@ Stay strictly on the prompt.
 `;
     }
 
+    // ===== OPENROUTER CALL =====
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -157,7 +186,7 @@ Stay strictly on the prompt.
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        temperature: 0.3,
+        temperature: 0.4,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: prompt }
@@ -166,48 +195,75 @@ Stay strictly on the prompt.
     });
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "No response";
+
+    if (!data || !data.choices) {
+      console.error("AI RAW ERROR:", data);
+      return res.status(500).json({ error: "AI response invalid" });
+    }
+
+    const content = data.choices[0]?.message?.content || "No response";
 
     res.json({ data: { content } });
 
   } catch (err) {
     console.error("AI ERROR:", err);
-    res.status(500).json({ error: "AI failed" });
+    res.status(500).json({ error: "Text AI failed" });
   }
 });
 
-// ===== IMAGE =====
+// =====================================================
+// 🖼️ IMAGE AI (REAL)
+// =====================================================
+
 app.post("/generate-image", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt required" });
+    }
 
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
     res.json({ data: { url } });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Image AI failed" });
   }
 });
 
-// ===== VIDEO (READY FOR RUNWAY) =====
+// =====================================================
+// 🎬 VIDEO AI (READY FOR RUNWAY)
+// =====================================================
+
 app.post("/generate-video", async (req, res) => {
   try {
+    const { prompt } = req.body;
+
+    // ⚠️ Replace later with Runway API
     const url = "https://www.w3schools.com/html/mov_bbb.mp4";
 
     res.json({ data: { url } });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Video AI failed" });
   }
 });
 
-// ===== HEALTH =====
+// =====================================================
+// ❤️ HEALTH CHECK
+// =====================================================
+
 app.get("/", (req, res) => {
-  res.send("ReelMind Backend Running 🚀");
+  res.send("🚀 ReelMind Backend LIVE & FAST");
 });
 
-// ===== START =====
+// =====================================================
+// 🚀 START SERVER
+// =====================================================
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
