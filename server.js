@@ -20,7 +20,7 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// ===== RATE LIMIT (ANTI-SPAM) =====
+// ===== RATE LIMIT =====
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
@@ -28,8 +28,12 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// ===== MIDDLEWARE =====
-app.use(cors());
+// ===== CORS (FIXED) =====
+app.use(cors({
+  origin: "*",
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json({ limit: "10mb" }));
 
 // ===== STATIC =====
@@ -39,22 +43,39 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const upload = multer({ dest: "uploads/" });
 
 // =====================================================
-// 🔐 AUTH
+// 🔐 AUTH (🔥 FIXED + DEBUG)
 // =====================================================
 const auth = async (req, res, next) => {
   try {
     const bearer = req.headers.authorization;
+
+    // 🔍 DEBUG
+    console.log("📩 AUTH HEADER:", bearer);
+
     if (!bearer || !bearer.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token" });
+      return res.status(401).json({ error: "No token provided" });
     }
 
     const token = bearer.split(" ")[1];
+
+    // 🔍 DEBUG TOKEN LENGTH
+    console.log("🔑 TOKEN LENGTH:", token?.length);
+
     const decoded = await admin.auth().verifyIdToken(token);
+
+    // 🔍 DEBUG USER
+    console.log("✅ USER VERIFIED:", decoded.uid);
 
     req.user = decoded;
     next();
+
   } catch (err) {
-    return res.status(401).json({ error: "Invalid token" });
+    console.error("❌ TOKEN ERROR:", err.message);
+
+    return res.status(401).json({
+      error: "Invalid token",
+      details: err.message // 🔥 VERY IMPORTANT
+    });
   }
 };
 
@@ -79,7 +100,7 @@ if (process.env.MONGO_URI) {
 // ===== MEMORY =====
 let users = {};
 let posts = [];
-let requestTracker = {}; // anti abuse
+let requestTracker = {};
 
 // ===== SCHEMAS =====
 const UserSchema = new mongoose.Schema({
@@ -153,7 +174,7 @@ app.get("/feed", async (req, res) => {
 });
 
 // =====================================================
-// 🤖 AI TEXT (ANTI ABUSE)
+// 🤖 AI TEXT
 // =====================================================
 app.post("/generate-text", auth, async (req, res) => {
   try {
@@ -165,7 +186,6 @@ app.post("/generate-text", auth, async (req, res) => {
       return res.json({ error: "Prompt too short" });
     }
 
-    // ⛔ cooldown (3 sec)
     const now = Date.now();
     if (requestTracker[uid] && now - requestTracker[uid] < 3000) {
       return res.json({ error: "Slow down ⚠️" });
