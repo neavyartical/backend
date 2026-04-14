@@ -8,6 +8,7 @@ const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 
 // ===== INIT =====
 const app = express();
@@ -20,28 +21,36 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// 🔥 SERVE UPLOADS (IMPORTANT)
+// ===== ENSURE UPLOAD FOLDER =====
+if (!fs.existsSync("uploads")) {
+  fs.mkdirSync("uploads");
+}
+
+// ===== STATIC FILES =====
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ===== MULTER (UPLOAD SYSTEM) =====
+// ===== MULTER =====
 const upload = multer({ dest: "uploads/" });
 
-// ===== DATABASE =====
-mongoose.connect(process.env.MONGO_URI)
-.then(()=>console.log("✅ MongoDB Connected"))
-.catch(err=>console.log("❌ MongoDB Error:", err));
+// =====================================================
+// ✅ SAFE DATABASE CONNECT (FIXED)
+// =====================================================
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.log("⚠️ No Mongo URI - running WITHOUT database");
+} else {
+  mongoose.connect(MONGO_URI)
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.log("❌ MongoDB Error:", err.message));
+}
 
 // ===== SCHEMAS =====
 const UserSchema = new mongoose.Schema({
   email: String,
   credits: { type: Number, default: 1000 },
   referrals: { type: Number, default: 0 },
-  memory: [
-    {
-      user: String,
-      ai: String
-    }
-  ]
+  memory: [{ user: String, ai: String }]
 });
 
 const PostSchema = new mongoose.Schema({
@@ -62,22 +71,17 @@ io.on("connection", (socket) => {
 // =====================================================
 // 🔐 AUTH
 // =====================================================
-
 app.post("/login", async (req, res) => {
   try {
     const { email } = req.body;
-
     if (!email) return res.status(400).json({ error: "Email required" });
 
     let user = await User.findOne({ email });
-
-    if (!user) {
-      user = await User.create({ email });
-    }
+    if (!user) user = await User.create({ email });
 
     res.json({ data: { token: email } });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Login failed" });
   }
 });
@@ -85,35 +89,31 @@ app.post("/login", async (req, res) => {
 app.get("/me", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
-
     const user = await User.findOne({ email: token });
 
     if (!user) return res.status(401).json({ error: "Unauthorized" });
 
     res.json({ data: user });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "User fetch failed" });
   }
 });
 
 // =====================================================
-// 📤 UPLOAD (REAL)
+// 📤 UPLOAD
 // =====================================================
-
 app.post("/upload", upload.single("file"), (req, res) => {
   try {
     const file = req.file;
-
-    if (!file) return res.status(400).json({ error: "No file uploaded" });
+    if (!file) return res.status(400).json({ error: "No file" });
 
     const type = file.mimetype.startsWith("video") ? "video" : "image";
-
     const url = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
 
     res.json({ url, type });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Upload failed" });
   }
 });
@@ -121,18 +121,16 @@ app.post("/upload", upload.single("file"), (req, res) => {
 // =====================================================
 // 📱 POSTS
 // =====================================================
-
 app.post("/post", async (req, res) => {
   try {
     const { content, type } = req.body;
 
     const newPost = await Post.create({ content, type });
-
     io.emit("new_post", newPost);
 
     res.json({ success: true });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Post failed" });
   }
 });
@@ -142,50 +140,17 @@ app.get("/feed", async (req, res) => {
     const posts = await Post.find().sort({ createdAt: -1 });
     res.json({ data: posts });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Feed failed" });
   }
 });
 
-app.post("/like/:id", async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-
-    if (post) {
-      post.likes++;
-      await post.save();
-    }
-
-    res.json({ success: true });
-
-  } catch (err) {
-    res.status(500).json({ error: "Like failed" });
-  }
-});
-
 // =====================================================
-// 🤖 AI (MEMORY + MODES)
+// 🤖 AI
 // =====================================================
-
 app.post("/generate-text", async (req, res) => {
   try {
-    const { prompt, mode } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-
-    const user = await User.findOne({ email: token });
-
-    let memoryContext = "";
-    if (user?.memory?.length) {
-      memoryContext = user.memory.map(m =>
-        `User: ${m.user}\nAI: ${m.ai}`
-      ).join("\n");
-    }
-
-    let systemPrompt = "Create viral TikTok content.";
-    if (mode === "story") systemPrompt = "Write cinematic story.";
-    if (mode === "script") systemPrompt = "Write video script.";
-    if (mode === "caption") systemPrompt = "Short viral captions.";
-    if (mode === "ads") systemPrompt = "High converting ads.";
+    const { prompt } = req.body;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -195,35 +160,23 @@ app.post("/generate-text", async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        temperature: 0.4,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: memoryContext + "\n" + prompt }
-        ]
+        messages: [{ role: "user", content: prompt }]
       })
     });
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "No response";
 
-    if (user) {
-      user.memory.push({ user: prompt, ai: content });
-      if (user.memory.length > 10) user.memory.shift();
-      await user.save();
-    }
-
     res.json({ data: { content } });
 
-  } catch (err) {
-    console.error(err);
+  } catch {
     res.status(500).json({ error: "AI failed" });
   }
 });
 
 // =====================================================
-// 🖼️ IMAGE
+// 🖼️ IMAGE (FIXED)
 // =====================================================
-
 app.post("/generate-image", (req, res) => {
   const { prompt } = req.body;
 
@@ -233,9 +186,8 @@ app.post("/generate-image", (req, res) => {
 });
 
 // =====================================================
-// 🎬 VIDEO (RUNWAY)
+// 🎬 VIDEO
 // =====================================================
-
 app.post("/generate-video", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -257,7 +209,7 @@ app.post("/generate-video", async (req, res) => {
       }
     });
 
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Video failed" });
   }
 });
@@ -265,7 +217,6 @@ app.post("/generate-video", async (req, res) => {
 // =====================================================
 // ❤️ HEALTH
 // =====================================================
-
 app.get("/", (req, res) => {
   res.send("🚀 ReelMind Backend LIVE");
 });
@@ -273,7 +224,6 @@ app.get("/", (req, res) => {
 // =====================================================
 // 🚀 START
 // =====================================================
-
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
