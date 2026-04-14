@@ -9,6 +9,9 @@ const mongoose = require("mongoose");
 const multer = require("multer");
 const path = require("path");
 
+// 🔥 FIREBASE ADMIN
+const admin = require("./firebaseAdmin");
+
 // ===== INIT =====
 const app = express();
 const server = http.createServer(app);
@@ -27,7 +30,24 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const upload = multer({ dest: "uploads/" });
 
 // =====================================================
-// 🧠 SAFE DATABASE CONNECT (NO CRASH)
+// 🔐 FIREBASE AUTH MIDDLEWARE
+// =====================================================
+const auth = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.user = decoded;
+
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+// =====================================================
+// 🧠 SAFE DATABASE CONNECT
 // =====================================================
 let dbConnected = false;
 
@@ -45,7 +65,7 @@ if (!process.env.MONGO_URI) {
     });
 }
 
-// ===== FALLBACK MEMORY STORAGE =====
+// ===== MEMORY FALLBACK =====
 let users = {};
 let posts = [];
 
@@ -73,57 +93,44 @@ io.on("connection", (socket) => {
 });
 
 // =====================================================
-// 🔐 AUTH
+// 👤 PROFILE (SECURE)
 // =====================================================
-app.post("/login", async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email required" });
+app.get("/me", auth, async (req, res) => {
+  const uid = req.user.uid;
+  const email = req.user.email;
 
   if (!dbConnected) {
-    if (!users[email]) users[email] = { email, credits: 1000 };
-    return res.json({ data: { token: email } });
+    if (!users[uid]) users[uid] = { email, credits: 1000 };
+    return res.json({ data: users[uid] });
   }
 
   let user = await User.findOne({ email });
   if (!user) user = await User.create({ email });
 
-  res.json({ data: { token: email } });
-});
-
-app.get("/me", async (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!dbConnected) {
-    return res.json({ data: users[token] || {} });
-  }
-
-  const user = await User.findOne({ email: token });
   res.json({ data: user });
 });
 
 // =====================================================
-// 📤 UPLOAD
+// 📤 UPLOAD (PROTECTED)
 // =====================================================
-app.post("/upload", upload.single("file"), (req, res) => {
+app.post("/upload", auth, upload.single("file"), (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ error: "No file" });
 
   const type = file.mimetype.startsWith("video") ? "video" : "image";
-
   const url = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
 
   res.json({ url, type });
 });
 
 // =====================================================
-// 📱 POSTS
+// 📱 POSTS (PROTECTED)
 // =====================================================
-app.post("/post", async (req, res) => {
+app.post("/post", auth, async (req, res) => {
   const { content, type } = req.body;
 
   if (!dbConnected) {
-    const post = { content, type, likes: 0 };
-    posts.unshift(post);
+    posts.unshift({ content, type, likes: 0 });
     return res.json({ success: true });
   }
 
@@ -141,11 +148,29 @@ app.get("/feed", async (req, res) => {
 });
 
 // =====================================================
-// 🤖 AI
+// 🤖 AI TEXT (WITH CREDITS)
 // =====================================================
-app.post("/generate-text", async (req, res) => {
+app.post("/generate-text", auth, async (req, res) => {
   try {
     const { prompt } = req.body;
+    const uid = req.user.uid;
+    const email = req.user.email;
+
+    let user;
+
+    if (!dbConnected) {
+      if (!users[uid]) users[uid] = { email, credits: 1000 };
+      user = users[uid];
+    } else {
+      user = await User.findOne({ email }) || await User.create({ email });
+    }
+
+    if (user.credits <= 0) {
+      return res.json({ error: "No credits left" });
+    }
+
+    user.credits -= 1;
+    if (dbConnected) await user.save();
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -162,7 +187,12 @@ app.post("/generate-text", async (req, res) => {
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "No response";
 
-    res.json({ data: { content } });
+    res.json({
+      data: {
+        content,
+        creditsLeft: user.credits
+      }
+    });
 
   } catch (err) {
     res.status(500).json({ error: "AI failed" });
@@ -170,29 +200,37 @@ app.post("/generate-text", async (req, res) => {
 });
 
 // =====================================================
-// 🖼️ IMAGE (FIXED)
+// 🖼️ IMAGE (WITH CREDITS)
 // =====================================================
-app.post("/generate-image", (req, res) => {
+app.post("/generate-image", auth, (req, res) => {
   const { prompt } = req.body;
-
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
-
   res.json({ data: { url } });
 });
 
 // =====================================================
 // 🎬 VIDEO (SAFE)
 // =====================================================
-app.post("/generate-video", async (req, res) => {
-  try {
-    res.json({
-      data: {
-        url: "https://www.w3schools.com/html/mov_bbb.mp4"
-      }
-    });
-  } catch {
-    res.status(500).json({ error: "Video failed" });
-  }
+app.post("/generate-video", auth, async (req, res) => {
+  res.json({
+    data: {
+      url: "https://www.w3schools.com/html/mov_bbb.mp4"
+    }
+  });
+});
+
+// =====================================================
+// 🔊 VOICE CLONE (READY)
+// =====================================================
+app.post("/voice-clone", auth, async (req, res) => {
+  const { text } = req.body;
+
+  console.log("🎙️ Voice cloning:", text);
+
+  res.json({
+    success: true,
+    message: "Voice cloning coming soon 🔥"
+  });
 });
 
 // =====================================================
