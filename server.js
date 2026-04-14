@@ -20,13 +20,12 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// ===== GLOBAL RATE LIMIT (ANTI SPAM) =====
+// ===== GLOBAL RATE LIMIT =====
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // max 30 requests/min per IP
+  windowMs: 60 * 1000,
+  max: 30,
   message: { error: "Too many requests, slow down ⚠️" }
 });
-
 app.use(limiter);
 
 // ===== MIDDLEWARE =====
@@ -84,10 +83,10 @@ if (!process.env.MONGO_URI) {
     });
 }
 
-// ===== MEMORY =====
+// ===== MEMORY STORAGE (FIXED) =====
 let users = {};
-let posts = {};
-let requestTracker = {}; // 🔥 anti abuse tracker
+let posts = { list: [] }; // ✅ FIXED
+let requestTracker = {};  // anti abuse
 
 // ===== SCHEMAS =====
 const UserSchema = new mongoose.Schema({
@@ -156,8 +155,7 @@ app.post("/post", auth, async (req, res) => {
   if (!content) return res.status(400).json({ error: "No content" });
 
   if (!dbConnected) {
-    if (!posts.list) posts.list = [];
-    posts.list.unshift({ content, type, likes: 0 });
+    posts.list.unshift({ content, type, likes: 0 }); // ✅ FIXED
     return res.json({ success: true });
   }
 
@@ -168,14 +166,14 @@ app.post("/post", auth, async (req, res) => {
 });
 
 app.get("/feed", async (req, res) => {
-  if (!dbConnected) return res.json({ data: posts.list || [] });
+  if (!dbConnected) return res.json({ data: posts.list });
 
   const data = await Post.find().sort({ createdAt: -1 });
   res.json({ data });
 });
 
 // =====================================================
-// 🤖 AI TEXT (WITH ANTI ABUSE)
+// 🤖 AI TEXT (ANTI ABUSE + CREDITS)
 // =====================================================
 app.post("/generate-text", auth, async (req, res) => {
   try {
@@ -183,12 +181,12 @@ app.post("/generate-text", auth, async (req, res) => {
     const uid = req.user.uid;
     const email = req.user.email;
 
-    // 🔥 INPUT VALIDATION
+    // ✅ VALIDATION
     if (!prompt || prompt.length < 3) {
       return res.json({ error: "Prompt too short" });
     }
 
-    // 🔥 ANTI-SPAM USER LIMIT (cooldown 3s)
+    // ✅ COOLDOWN (ANTI SPAM)
     const now = Date.now();
     if (requestTracker[uid] && now - requestTracker[uid] < 3000) {
       return res.json({ error: "Slow down ⚠️" });
