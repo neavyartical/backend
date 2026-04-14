@@ -14,15 +14,22 @@ const fetch = require("node-fetch");
 const admin = require("firebase-admin");
 
 // =========================
-// 🔥 FIREBASE ADMIN INIT (FIXED)
+// 🔥 FIREBASE ADMIN INIT (FINAL FIX)
 // =========================
 let serviceAccount;
 
 try {
-  serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT in ENV");
+  }
+
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
   console.log("🔥 Firebase Project:", serviceAccount.project_id);
+
 } catch (e) {
-  console.error("❌ FIREBASE KEY ERROR:", e.message);
+  console.error("❌ FIREBASE INIT ERROR:", e.message);
+  process.exit(1);
 }
 
 if (!admin.apps.length) {
@@ -60,7 +67,7 @@ const upload = multer({ dest: "uploads/" });
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // =========================
-// 🔐 AUTH FIXED (NO MORE INVALID TOKEN)
+// 🔐 AUTH (FINAL CLEAN VERSION)
 // =========================
 const auth = async (req, res, next) => {
   try {
@@ -75,6 +82,9 @@ const auth = async (req, res, next) => {
     const decoded = await admin.auth().verifyIdToken(token);
 
     req.user = decoded;
+
+    console.log("✅ AUTH OK:", decoded.uid);
+
     next();
 
   } catch (err) {
@@ -173,21 +183,6 @@ app.post("/use-credit", auth, async (req, res) => {
 });
 
 // =========================
-// 💰 ADD CREDIT
-// =========================
-app.post("/add-credit", async (req, res) => {
-  const { email, amount } = req.body;
-
-  const user = await User.findOne({ email });
-  if (!user) return res.json({ error: "User not found" });
-
-  user.credits += amount;
-  await user.save();
-
-  res.json({ success: true, credits: user.credits });
-});
-
-// =========================
 // 🤖 GENERATE TEXT
 // =========================
 app.post("/generate-text", auth, async (req, res) => {
@@ -211,7 +206,6 @@ app.post("/generate-text", auth, async (req, res) => {
     user.credits -= 1;
     if (dbConnected) await user.save();
 
-    // 🔥 REAL AI (OpenRouter)
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -271,27 +265,6 @@ app.post("/upload", auth, upload.single("file"), (req, res) => {
   const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
   res.json({ url });
-});
-
-// =========================
-// 📡 FEED
-// =========================
-app.get("/feed", async (req, res) => {
-  if (!dbConnected) return res.json({ data: posts });
-
-  const data = await Post.find().sort({ createdAt: -1 });
-  res.json({ data });
-});
-
-// =========================
-// 🧪 TEST AUTH
-// =========================
-app.get("/test-auth", auth, (req, res) => {
-  res.json({
-    success: true,
-    uid: req.user.uid,
-    email: req.user.email
-  });
 });
 
 // =========================
