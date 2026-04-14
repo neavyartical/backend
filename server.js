@@ -20,20 +20,16 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// ===== GLOBAL RATE LIMIT =====
+// ===== RATE LIMIT (ANTI-SPAM) =====
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
-  message: { error: "Too many requests, slow down ⚠️" }
+  message: { error: "Too many requests ⚠️" }
 });
 app.use(limiter);
 
 // ===== MIDDLEWARE =====
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 // ===== STATIC =====
@@ -43,12 +39,11 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 const upload = multer({ dest: "uploads/" });
 
 // =====================================================
-// 🔐 FIREBASE AUTH
+// 🔐 AUTH
 // =====================================================
 const auth = async (req, res, next) => {
   try {
     const bearer = req.headers.authorization;
-
     if (!bearer || !bearer.startsWith("Bearer ")) {
       return res.status(401).json({ error: "No token" });
     }
@@ -58,9 +53,7 @@ const auth = async (req, res, next) => {
 
     req.user = decoded;
     next();
-
   } catch (err) {
-    console.error("Auth error:", err.message);
     return res.status(401).json({ error: "Invalid token" });
   }
 };
@@ -70,9 +63,7 @@ const auth = async (req, res, next) => {
 // =====================================================
 let dbConnected = false;
 
-if (!process.env.MONGO_URI) {
-  console.log("⚠️ No Mongo URI → MEMORY MODE");
-} else {
+if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI)
     .then(() => {
       dbConnected = true;
@@ -81,56 +72,46 @@ if (!process.env.MONGO_URI) {
     .catch(err => {
       console.log("❌ Mongo Error:", err.message);
     });
+} else {
+  console.log("⚠️ Running in MEMORY MODE");
 }
 
-// ===== MEMORY STORAGE (FIXED) =====
+// ===== MEMORY =====
 let users = {};
-let posts = { list: [] }; // ✅ FIXED
-let requestTracker = {};  // anti abuse
+let posts = [];
+let requestTracker = {}; // anti abuse
 
 // ===== SCHEMAS =====
 const UserSchema = new mongoose.Schema({
   email: String,
-  credits: { type: Number, default: 1000 },
-  referrals: { type: Number, default: 0 }
+  credits: { type: Number, default: 1000 }
 });
 
 const PostSchema = new mongoose.Schema({
   content: String,
   type: String,
-  likes: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
 const Post = mongoose.models.Post || mongoose.model("Post", PostSchema);
 
-// ===== SOCKET =====
-io.on("connection", (socket) => {
-  console.log("🟢 User:", socket.id);
-});
-
 // =====================================================
 // 👤 PROFILE
 // =====================================================
 app.get("/me", auth, async (req, res) => {
-  try {
-    const uid = req.user.uid;
-    const email = req.user.email;
+  const uid = req.user.uid;
+  const email = req.user.email;
 
-    if (!dbConnected) {
-      if (!users[uid]) users[uid] = { email, credits: 1000 };
-      return res.json({ data: users[uid] });
-    }
-
-    let user = await User.findOne({ email });
-    if (!user) user = await User.create({ email });
-
-    res.json({ data: user });
-
-  } catch {
-    res.status(500).json({ error: "Profile failed" });
+  if (!dbConnected) {
+    if (!users[uid]) users[uid] = { email, credits: 1000 };
+    return res.json({ data: users[uid] });
   }
+
+  let user = await User.findOne({ email });
+  if (!user) user = await User.create({ email });
+
+  res.json({ data: user });
 });
 
 // =====================================================
@@ -140,7 +121,6 @@ app.post("/upload", auth, upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
 
   const type = req.file.mimetype.startsWith("video") ? "video" : "image";
-
   const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
   res.json({ url, type });
@@ -155,7 +135,7 @@ app.post("/post", auth, async (req, res) => {
   if (!content) return res.status(400).json({ error: "No content" });
 
   if (!dbConnected) {
-    posts.list.unshift({ content, type, likes: 0 }); // ✅ FIXED
+    posts.unshift({ content, type });
     return res.json({ success: true });
   }
 
@@ -166,14 +146,14 @@ app.post("/post", auth, async (req, res) => {
 });
 
 app.get("/feed", async (req, res) => {
-  if (!dbConnected) return res.json({ data: posts.list });
+  if (!dbConnected) return res.json({ data: posts });
 
   const data = await Post.find().sort({ createdAt: -1 });
   res.json({ data });
 });
 
 // =====================================================
-// 🤖 AI TEXT (ANTI ABUSE + CREDITS)
+// 🤖 AI TEXT (ANTI ABUSE)
 // =====================================================
 app.post("/generate-text", auth, async (req, res) => {
   try {
@@ -181,12 +161,11 @@ app.post("/generate-text", auth, async (req, res) => {
     const uid = req.user.uid;
     const email = req.user.email;
 
-    // ✅ VALIDATION
     if (!prompt || prompt.length < 3) {
       return res.json({ error: "Prompt too short" });
     }
 
-    // ✅ COOLDOWN (ANTI SPAM)
+    // ⛔ cooldown (3 sec)
     const now = Date.now();
     if (requestTracker[uid] && now - requestTracker[uid] < 3000) {
       return res.json({ error: "Slow down ⚠️" });
@@ -202,11 +181,11 @@ app.post("/generate-text", auth, async (req, res) => {
       user = await User.findOne({ email }) || await User.create({ email });
     }
 
-    if (!user || user.credits <= 0) {
+    if (user.credits <= 0) {
       return res.json({ error: "No credits left" });
     }
 
-    user.credits = Math.max(0, user.credits - 1);
+    user.credits -= 1;
     if (dbConnected) await user.save();
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
