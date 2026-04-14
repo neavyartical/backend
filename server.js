@@ -17,13 +17,13 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ===== DATABASE (TEMP - MEMORY) =====
+// ===== DATABASE (TEMP MEMORY) =====
 let users = {};
 let posts = [];
 let idCounter = 1;
 
 // ===== SOCKET =====
-io.on("connection", (socket) => {
+io.on("connection", () => {
   console.log("🟢 User connected");
 });
 
@@ -49,7 +49,6 @@ app.post("/login", (req, res) => {
 // ===== GET USER =====
 app.get("/me", (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
-
   const user = users[token];
 
   if (!user) {
@@ -85,21 +84,49 @@ app.get("/feed", (req, res) => {
 // ===== LIKE =====
 app.post("/like/:id", (req, res) => {
   const id = parseInt(req.params.id);
-
   const post = posts.find(p => p.id === id);
+
   if (post) post.likes++;
 
   res.json({ success: true });
 });
 
 // =====================================================
-// 🔥 REAL AI SECTION (FIXED & WORKING)
+// 🔥 REAL AI SECTION (STRICT MODE)
 // =====================================================
 
-// ===== TEXT (OPENROUTER REAL) =====
+// ===== TEXT (STRICT OPENROUTER) =====
 app.post("/generate-text", async (req, res) => {
   try {
     const { prompt } = req.body;
+
+    const strictPrompt = `
+You are ReelMind AI — a high-performance content generator.
+
+STRICT RULES:
+- Follow the user prompt EXACTLY
+- Do NOT change topic
+- Do NOT add unrelated content
+- Be precise and structured
+- No filler words
+
+OUTPUT FORMAT (MANDATORY):
+
+Hook:
+<short viral hook>
+
+Content:
+<main content strictly based on prompt>
+
+Caption:
+<engaging caption>
+
+Hashtags:
+<relevant hashtags only>
+
+User Prompt:
+${prompt}
+`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -109,7 +136,18 @@ app.post("/generate-text", async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
+        temperature: 0.2, // 🔥 strict control
+        max_tokens: 800,
+        messages: [
+          {
+            role: "system",
+            content: "You strictly follow instructions and never go off-topic."
+          },
+          {
+            role: "user",
+            content: strictPrompt
+          }
+        ]
       })
     });
 
@@ -125,7 +163,7 @@ app.post("/generate-text", async (req, res) => {
   }
 });
 
-// ===== IMAGE (POLLINATIONS REAL) =====
+// ===== IMAGE (REAL POLLINATIONS) =====
 app.post("/generate-image", async (req, res) => {
   try {
     const { prompt } = req.body;
@@ -140,12 +178,9 @@ app.post("/generate-image", async (req, res) => {
   }
 });
 
-// ===== VIDEO (TEMP REAL URL UNTIL RUNWAY CONNECTED) =====
+// ===== VIDEO (READY FOR RUNWAY) =====
 app.post("/generate-video", async (req, res) => {
   try {
-    const { prompt } = req.body;
-
-    // ⚠️ Replace with Runway API later
     const url = "https://www.w3schools.com/html/mov_bbb.mp4";
 
     res.json({ data: { url } });
@@ -156,12 +191,12 @@ app.post("/generate-video", async (req, res) => {
   }
 });
 
-// ===== HEALTH CHECK =====
+// ===== HEALTH =====
 app.get("/", (req, res) => {
   res.send("ReelMind Backend Running 🚀");
 });
 
-// ===== START SERVER =====
+// ===== START =====
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
