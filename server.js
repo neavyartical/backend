@@ -1,70 +1,105 @@
+// ===== IMPORTS =====
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// ===== DATABASE (TEMP MEMORY) =====
+// ===== MIDDLEWARE =====
+app.use(cors());
+app.use(express.json());
+
+// ===== DATABASE (IN-MEMORY FOR NOW) =====
+let users = {};
 let posts = [];
+let idCounter = 1;
+
+// ===== SOCKET =====
+io.on("connection", (socket) => {
+  console.log("User connected");
+});
 
 // ===== LOGIN =====
-app.post("/login", (req,res)=>{
-res.json({
-data:{ token:"demo-token" }
-});
-});
+app.post("/login", (req, res) => {
+  const { email } = req.body;
 
-// ===== USER =====
-app.get("/me",(req,res)=>{
-res.json({
-data:{
-email:"neavyartical@gmail.com",
-credits:9999,
-referrals:5
-}
-});
-});
+  if (!users[email]) {
+    users[email] = {
+      email,
+      credits: 1000,
+      referrals: 0
+    };
+  }
 
-// ===== FEED =====
-app.get("/feed",(req,res)=>{
-res.json({ data: posts });
+  res.json({
+    data: {
+      token: email
+    }
+  });
 });
 
-// ===== POST =====
-app.post("/post",(req,res)=>{
-const { content, type } = req.body;
+// ===== GET USER =====
+app.get("/me", (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
 
-const newPost = {
-id: Date.now(),
-content,
-type,
-likes:0
-};
+  const user = users[token];
 
-posts.unshift(newPost);
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
-// 🔥 REAL-TIME PUSH
-io.emit("new_post", newPost);
+  res.json({ data: user });
+});
 
-res.json({ success:true });
+// ===== CREATE POST =====
+app.post("/post", (req, res) => {
+  const { content, type } = req.body;
+
+  const newPost = {
+    id: idCounter++,
+    content,
+    type,
+    likes: 0
+  };
+
+  posts.unshift(newPost);
+
+  // 🔥 REALTIME PUSH
+  io.emit("new_post", newPost);
+
+  res.json({ success: true });
+});
+
+// ===== GET FEED =====
+app.get("/feed", (req, res) => {
+  res.json({ data: posts });
 });
 
 // ===== LIKE =====
-app.post("/like/:id",(req,res)=>{
-const post = posts.find(p=>p.id==req.params.id);
-if(post) post.likes++;
-res.json({ success:true });
+app.post("/like/:id", (req, res) => {
+  const id = parseInt(req.params.id);
+
+  const post = posts.find(p => p.id === id);
+  if (post) {
+    post.likes++;
+  }
+
+  res.json({ success: true });
 });
 
-// ===== START =====
-server.listen(3000,()=>{
-console.log("🔥 ReelMind Server Running on port 3000");
+// ===== HEALTH CHECK =====
+app.get("/", (req, res) => {
+  res.send("ReelMind Backend Running 🚀");
+});
+
+// ===== START SERVER =====
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("🔥 Server running on port " + PORT);
 });
