@@ -8,6 +8,7 @@ const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const multer = require("multer");
 const path = require("path");
+const rateLimit = require("express-rate-limit");
 
 // 🔥 FIREBASE ADMIN
 const admin = require("./firebaseAdmin");
@@ -18,6 +19,15 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
+
+// ===== GLOBAL RATE LIMIT (ANTI SPAM) =====
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // max 30 requests/min per IP
+  message: { error: "Too many requests, slow down ⚠️" }
+});
+
+app.use(limiter);
 
 // ===== MIDDLEWARE =====
 app.use(cors({
@@ -76,7 +86,8 @@ if (!process.env.MONGO_URI) {
 
 // ===== MEMORY =====
 let users = {};
-let posts = [];
+let posts = {};
+let requestTracker = {}; // 🔥 anti abuse tracker
 
 // ===== SCHEMAS =====
 const UserSchema = new mongoose.Schema({
@@ -145,7 +156,8 @@ app.post("/post", auth, async (req, res) => {
   if (!content) return res.status(400).json({ error: "No content" });
 
   if (!dbConnected) {
-    posts.unshift({ content, type, likes: 0 });
+    if (!posts.list) posts.list = [];
+    posts.list.unshift({ content, type, likes: 0 });
     return res.json({ success: true });
   }
 
@@ -156,20 +168,32 @@ app.post("/post", auth, async (req, res) => {
 });
 
 app.get("/feed", async (req, res) => {
-  if (!dbConnected) return res.json({ data: posts });
+  if (!dbConnected) return res.json({ data: posts.list || [] });
 
   const data = await Post.find().sort({ createdAt: -1 });
   res.json({ data });
 });
 
 // =====================================================
-// 🤖 AI TEXT (WITH CREDITS)
+// 🤖 AI TEXT (WITH ANTI ABUSE)
 // =====================================================
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const { prompt } = req.body;
     const uid = req.user.uid;
     const email = req.user.email;
+
+    // 🔥 INPUT VALIDATION
+    if (!prompt || prompt.length < 3) {
+      return res.json({ error: "Prompt too short" });
+    }
+
+    // 🔥 ANTI-SPAM USER LIMIT (cooldown 3s)
+    const now = Date.now();
+    if (requestTracker[uid] && now - requestTracker[uid] < 3000) {
+      return res.json({ error: "Slow down ⚠️" });
+    }
+    requestTracker[uid] = now;
 
     let user;
 
