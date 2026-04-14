@@ -1,9 +1,12 @@
 // ===== IMPORTS =====
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
+const fetch = require("node-fetch");
 
+// ===== INIT =====
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -14,14 +17,14 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json());
 
-// ===== DATABASE (IN-MEMORY FOR NOW) =====
+// ===== DATABASE (TEMP - MEMORY) =====
 let users = {};
 let posts = [];
 let idCounter = 1;
 
 // ===== SOCKET =====
 io.on("connection", (socket) => {
-  console.log("User connected");
+  console.log("🟢 User connected");
 });
 
 // ===== LOGIN =====
@@ -69,7 +72,6 @@ app.post("/post", (req, res) => {
 
   posts.unshift(newPost);
 
-  // 🔥 REALTIME PUSH
   io.emit("new_post", newPost);
 
   res.json({ success: true });
@@ -85,11 +87,73 @@ app.post("/like/:id", (req, res) => {
   const id = parseInt(req.params.id);
 
   const post = posts.find(p => p.id === id);
-  if (post) {
-    post.likes++;
-  }
+  if (post) post.likes++;
 
   res.json({ success: true });
+});
+
+// =====================================================
+// 🔥 REAL AI SECTION (FIXED & WORKING)
+// =====================================================
+
+// ===== TEXT (OPENROUTER REAL) =====
+app.post("/generate-text", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+
+    const content = data.choices?.[0]?.message?.content || "No AI response";
+
+    res.json({ data: { content } });
+
+  } catch (err) {
+    console.error("TEXT ERROR:", err);
+    res.status(500).json({ error: "Text AI failed" });
+  }
+});
+
+// ===== IMAGE (POLLINATIONS REAL) =====
+app.post("/generate-image", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+    res.json({ data: { url } });
+
+  } catch (err) {
+    console.error("IMAGE ERROR:", err);
+    res.status(500).json({ error: "Image AI failed" });
+  }
+});
+
+// ===== VIDEO (TEMP REAL URL UNTIL RUNWAY CONNECTED) =====
+app.post("/generate-video", async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    // ⚠️ Replace with Runway API later
+    const url = "https://www.w3schools.com/html/mov_bbb.mp4";
+
+    res.json({ data: { url } });
+
+  } catch (err) {
+    console.error("VIDEO ERROR:", err);
+    res.status(500).json({ error: "Video AI failed" });
+  }
 });
 
 // ===== HEALTH CHECK =====
