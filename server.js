@@ -20,39 +20,49 @@ const io = new Server(server, {
 });
 
 // ===== MIDDLEWARE =====
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.use(express.json({ limit: "10mb" }));
 
-// ===== STATIC UPLOADS =====
+// ===== STATIC =====
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ===== FILE UPLOAD =====
 const upload = multer({ dest: "uploads/" });
 
 // =====================================================
-// 🔐 FIREBASE AUTH MIDDLEWARE
+// 🔐 FIREBASE AUTH
 // =====================================================
 const auth = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "No token" });
+    const bearer = req.headers.authorization;
 
+    if (!bearer || !bearer.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No token" });
+    }
+
+    const token = bearer.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(token);
-    req.user = decoded;
 
+    req.user = decoded;
     next();
+
   } catch (err) {
+    console.error("Auth error:", err.message);
     return res.status(401).json({ error: "Invalid token" });
   }
 };
 
 // =====================================================
-// 🧠 SAFE DATABASE CONNECT
+// 🧠 DATABASE
 // =====================================================
 let dbConnected = false;
 
 if (!process.env.MONGO_URI) {
-  console.log("⚠️ No Mongo URI → Running WITHOUT DB");
+  console.log("⚠️ No Mongo URI → MEMORY MODE");
 } else {
   mongoose.connect(process.env.MONGO_URI)
     .then(() => {
@@ -61,11 +71,10 @@ if (!process.env.MONGO_URI) {
     })
     .catch(err => {
       console.log("❌ Mongo Error:", err.message);
-      console.log("⚠️ Falling back to MEMORY mode");
     });
 }
 
-// ===== MEMORY FALLBACK =====
+// ===== MEMORY =====
 let users = {};
 let posts = [];
 
@@ -73,8 +82,7 @@ let posts = [];
 const UserSchema = new mongoose.Schema({
   email: String,
   credits: { type: Number, default: 1000 },
-  referrals: { type: Number, default: 0 },
-  memory: [{ user: String, ai: String }]
+  referrals: { type: Number, default: 0 }
 });
 
 const PostSchema = new mongoose.Schema({
@@ -89,45 +97,52 @@ const Post = mongoose.models.Post || mongoose.model("Post", PostSchema);
 
 // ===== SOCKET =====
 io.on("connection", (socket) => {
-  console.log("🟢 User connected:", socket.id);
+  console.log("🟢 User:", socket.id);
 });
 
 // =====================================================
-// 👤 PROFILE (SECURE)
+// 👤 PROFILE
 // =====================================================
 app.get("/me", auth, async (req, res) => {
-  const uid = req.user.uid;
-  const email = req.user.email;
+  try {
+    const uid = req.user.uid;
+    const email = req.user.email;
 
-  if (!dbConnected) {
-    if (!users[uid]) users[uid] = { email, credits: 1000 };
-    return res.json({ data: users[uid] });
+    if (!dbConnected) {
+      if (!users[uid]) users[uid] = { email, credits: 1000 };
+      return res.json({ data: users[uid] });
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) user = await User.create({ email });
+
+    res.json({ data: user });
+
+  } catch {
+    res.status(500).json({ error: "Profile failed" });
   }
-
-  let user = await User.findOne({ email });
-  if (!user) user = await User.create({ email });
-
-  res.json({ data: user });
 });
 
 // =====================================================
-// 📤 UPLOAD (PROTECTED)
+// 📤 UPLOAD
 // =====================================================
 app.post("/upload", auth, upload.single("file"), (req, res) => {
-  const file = req.file;
-  if (!file) return res.status(400).json({ error: "No file" });
+  if (!req.file) return res.status(400).json({ error: "No file" });
 
-  const type = file.mimetype.startsWith("video") ? "video" : "image";
-  const url = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+  const type = req.file.mimetype.startsWith("video") ? "video" : "image";
+
+  const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 
   res.json({ url, type });
 });
 
 // =====================================================
-// 📱 POSTS (PROTECTED)
+// 📱 POSTS
 // =====================================================
 app.post("/post", auth, async (req, res) => {
   const { content, type } = req.body;
+
+  if (!content) return res.status(400).json({ error: "No content" });
 
   if (!dbConnected) {
     posts.unshift({ content, type, likes: 0 });
@@ -165,11 +180,11 @@ app.post("/generate-text", auth, async (req, res) => {
       user = await User.findOne({ email }) || await User.create({ email });
     }
 
-    if (user.credits <= 0) {
+    if (!user || user.credits <= 0) {
       return res.json({ error: "No credits left" });
     }
 
-    user.credits -= 1;
+    user.credits = Math.max(0, user.credits - 1);
     if (dbConnected) await user.save();
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -195,12 +210,13 @@ app.post("/generate-text", auth, async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "AI failed" });
   }
 });
 
 // =====================================================
-// 🖼️ IMAGE (WITH CREDITS)
+// 🖼️ IMAGE
 // =====================================================
 app.post("/generate-image", auth, (req, res) => {
   const { prompt } = req.body;
@@ -209,27 +225,13 @@ app.post("/generate-image", auth, (req, res) => {
 });
 
 // =====================================================
-// 🎬 VIDEO (SAFE)
+// 🎬 VIDEO
 // =====================================================
-app.post("/generate-video", auth, async (req, res) => {
+app.post("/generate-video", auth, (req, res) => {
   res.json({
     data: {
       url: "https://www.w3schools.com/html/mov_bbb.mp4"
     }
-  });
-});
-
-// =====================================================
-// 🔊 VOICE CLONE (READY)
-// =====================================================
-app.post("/voice-clone", auth, async (req, res) => {
-  const { text } = req.body;
-
-  console.log("🎙️ Voice cloning:", text);
-
-  res.json({
-    success: true,
-    message: "Voice cloning coming soon 🔥"
   });
 });
 
