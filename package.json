@@ -30,7 +30,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.3.2",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "socket.io": "^4.7.5"
   },
 
   "devDependencies": {
@@ -46,6 +47,9 @@
     "openrouter",
     "saas",
     "startup",
-    "api"
+    "api",
+    "socket.io",
+    "realtime",
+    "tiktok-clone"
   ]
 }
