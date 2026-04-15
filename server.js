@@ -4,78 +4,42 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const http = require("http");
-const { Server } = require("socket.io");
-const mongoose = require("mongoose");
-const multer = require("multer");
-const path = require("path");
-const rateLimit = require("express-rate-limit");
 const fetch = require("node-fetch");
 const admin = require("firebase-admin");
 
 // =========================
-// 🔥 FIREBASE ADMIN (ENV ONLY - CLEAN)
+// 🔥 FIREBASE ADMIN (ENV)
 // =========================
 let serviceAccount;
 
 try {
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-    throw new Error("Missing FIREBASE_SERVICE_ACCOUNT in ENV");
-  }
-
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
   console.log("🔥 Firebase Project:", serviceAccount.project_id);
-
 } catch (e) {
-  console.error("❌ FIREBASE INIT ERROR:", e.message);
+  console.error("❌ FIREBASE ERROR:", e.message);
   process.exit(1);
 }
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-}
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 // =========================
 // 🚀 INIT SERVER
 // =========================
 const app = express();
-const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
+app.use(cors());
+app.use(express.json());
 
 // =========================
-// 🔥 MIDDLEWARE
-// =========================
-app.use(cors({ origin: "*" }));
-app.use(express.json({ limit: "10mb" }));
-
-const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30
-});
-app.use(limiter);
-
-// =========================
-// 📁 FILE UPLOAD
-// =========================
-const upload = multer({ dest: "uploads/" });
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// =========================
-// 🔐 AUTH (FIXED)
+// 🔐 AUTH MIDDLEWARE
 // =========================
 const auth = async (req, res, next) => {
   try {
     const bearer = req.headers.authorization;
 
-    if (!bearer || !bearer.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token" });
-    }
+    if (!bearer) return res.status(401).json({ error: "No token" });
 
     const token = bearer.split(" ")[1];
 
@@ -83,120 +47,54 @@ const auth = async (req, res, next) => {
 
     req.user = decoded;
 
-    console.log("✅ AUTH:", decoded.uid);
-
     next();
-
   } catch (err) {
-    console.error("❌ TOKEN ERROR:", err.message);
-
-    return res.status(401).json({
-      error: "Invalid token"
-    });
+    return res.status(401).json({ error: "Invalid token" });
   }
 };
 
 // =========================
-// 🧠 DATABASE
+// 💳 MEMORY CREDITS
 // =========================
-let dbConnected = false;
-
-if (process.env.MONGO_URI) {
-  mongoose.connect(process.env.MONGO_URI)
-    .then(() => {
-      dbConnected = true;
-      console.log("✅ MongoDB Connected");
-    })
-    .catch(err => console.log("❌ Mongo Error:", err.message));
-} else {
-  console.log("⚠️ MEMORY MODE ACTIVE");
-}
-
-// =========================
-// 🧠 MEMORY MODE
-// =========================
-let users = {};
-let posts = [];
-
-// =========================
-// 📦 SCHEMAS
-// =========================
-const UserSchema = new mongoose.Schema({
-  uid: String,
-  email: String,
-  credits: { type: Number, default: 5 }
-});
-
-const User = mongoose.models.User || mongoose.model("User", UserSchema);
-
-// =========================
-// 👤 PROFILE
-// =========================
-app.get("/me", auth, async (req, res) => {
-  const { uid, email } = req.user;
-
-  if (!dbConnected) {
-    if (!users[uid]) users[uid] = { email, credits: 5 };
-    return res.json({ data: users[uid] });
-  }
-
-  let user = await User.findOne({ uid });
-  if (!user) {
-    user = await User.create({ uid, email, credits: 5 });
-  }
-
-  res.json({ data: user });
-});
+let userCredits = {};
 
 // =========================
 // 💳 USE CREDIT
 // =========================
-app.post("/use-credit", auth, async (req, res) => {
-  const amount = req.body.amount || 1;
-  const { uid, email } = req.user;
+app.post("/use-credit", auth, (req, res) => {
+  const uid = req.user.uid;
 
-  let user;
+  if (!userCredits[uid]) userCredits[uid] = 5;
 
-  if (!dbConnected) {
-    if (!users[uid]) users[uid] = { email, credits: 5 };
-    user = users[uid];
-  } else {
-    user = await User.findOne({ uid }) || await User.create({ uid, email });
-  }
-
-  if (user.credits < amount) {
+  if (userCredits[uid] <= 0) {
     return res.json({ error: "NO_CREDITS" });
   }
 
-  user.credits -= amount;
-  if (dbConnected) await user.save();
+  userCredits[uid]--;
 
-  res.json({ success: true, credits: user.credits });
+  res.json({
+    success: true,
+    credits: userCredits[uid]
+  });
 });
 
 // =========================
-// 🤖 GENERATE TEXT
+// 💰 ADD CREDIT
+// =========================
+app.post("/add-credit", (req, res) => {
+  const { uid, amount } = req.body;
+
+  userCredits[uid] = (userCredits[uid] || 0) + amount;
+
+  res.json({ success: true });
+});
+
+// =========================
+// 🧠 GENERATE TEXT (OPENROUTER)
 // =========================
 app.post("/generate-text", auth, async (req, res) => {
   try {
     const { prompt } = req.body;
-    const { uid, email } = req.user;
-
-    let user;
-
-    if (!dbConnected) {
-      if (!users[uid]) users[uid] = { email, credits: 5 };
-      user = users[uid];
-    } else {
-      user = await User.findOne({ uid }) || await User.create({ uid, email });
-    }
-
-    if (user.credits <= 0) {
-      return res.json({ error: "NO_CREDITS" });
-    }
-
-    user.credits -= 1;
-    if (dbConnected) await user.save();
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -206,16 +104,25 @@ app.post("/generate-text", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }]
+        messages: [
+          {
+            role: "system",
+            content: "Give short, precise, high-quality answers strictly following the prompt."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ]
       })
     });
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "No response";
 
     res.json({
-      data: { content },
-      credits: user.credits
+      data: {
+        content: data.choices?.[0]?.message?.content || "No response"
+      }
     });
 
   } catch (err) {
@@ -225,7 +132,7 @@ app.post("/generate-text", auth, async (req, res) => {
 });
 
 // =========================
-// 🖼️ IMAGE
+// 🖼 IMAGE (FAST)
 // =========================
 app.post("/generate-image", auth, (req, res) => {
   const { prompt } = req.body;
@@ -238,39 +145,46 @@ app.post("/generate-image", auth, (req, res) => {
 });
 
 // =========================
-// 🎬 VIDEO
+// 🎬 VIDEO (STARTER)
 // =========================
-app.post("/generate-video", auth, (req, res) => {
+app.post("/generate-video", auth, async (req, res) => {
+  const { prompt } = req.body;
+
+  // 🔥 TEMP PREVIEW (replace later with Runway)
   res.json({
-    data: {
-      url: "https://www.w3schools.com/html/mov_bbb.mp4"
-    }
+    status: "🎬 Video generation started",
+    preview: "https://www.w3schools.com/html/mov_bbb.mp4",
+    prompt
   });
 });
 
 // =========================
-// 📤 UPLOAD
+// 👤 PROFILE
 // =========================
-app.post("/upload", auth, upload.single("file"), (req, res) => {
-  if (!req.file) return res.json({ error: "No file" });
+app.get("/me", auth, (req, res) => {
+  const uid = req.user.uid;
 
-  const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+  if (!userCredits[uid]) userCredits[uid] = 5;
 
-  res.json({ url });
+  res.json({
+    uid,
+    email: req.user.email,
+    credits: userCredits[uid]
+  });
 });
 
 // =========================
 // ❤️ HEALTH
 // =========================
 app.get("/", (req, res) => {
-  res.send("🚀 ReelMind Backend LIVE");
+  res.send("🚀 ReelMind AI Backend LIVE");
 });
 
 // =========================
-// 🚀 START
+// 🚀 START SERVER
 // =========================
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log("🔥 Server running on port " + PORT);
 });
