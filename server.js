@@ -8,23 +8,22 @@ const app = express();
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-// ===== MEMORY DB =====
 let user = { credits: 10 };
 let stats = { users: 1, requests: 0 };
 
-// ===== USER =====
+// HEALTH
+app.get("/", (req,res)=>{
+  res.send("🚀 Backend LIVE");
+});
+
+// USER
 app.get("/user",(req,res)=>{
   res.json(user);
 });
 
-// ===== TEXT =====
+// TEXT
 app.post("/generate-text", async (req,res)=>{
-
   const { prompt } = req.body;
-
-  if(user.credits <= 0){
-    return res.json({ error:"No credits" });
-  }
 
   user.credits--;
   stats.requests++;
@@ -50,18 +49,13 @@ app.post("/generate-text", async (req,res)=>{
     });
 
   }catch(e){
-    res.json({ error:"AI error" });
+    res.json({ error:"AI failed" });
   }
 });
 
-// ===== IMAGE =====
+// IMAGE
 app.post("/generate-image",(req,res)=>{
-
   const { prompt } = req.body;
-
-  if(user.credits <= 0){
-    return res.json({ error:"No credits" });
-  }
 
   user.credits--;
   stats.requests++;
@@ -72,14 +66,9 @@ app.post("/generate-image",(req,res)=>{
   });
 });
 
-// ===== ADMIN =====
+// ADMIN
 app.get("/admin",(req,res)=>{
   res.json(stats);
-});
-
-// ===== HEALTH =====
-app.get("/",(req,res)=>{
-  res.send("🚀 Backend LIVE");
 });
 
 app.listen(3000,()=>console.log("🔥 Server running"));
