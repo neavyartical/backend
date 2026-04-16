@@ -66,18 +66,31 @@ const COSTS = {
   video:5
 };
 
+/* =========================
+   CREDIT CHECK
+========================= */
 async function deductCredits(user, amount){
-  if(!user) return true;
+  if(!user){
+    return {
+      ok:false,
+      error:"Please login first"
+    };
+  }
 
   if(user.credits < amount){
-    return false;
+    return {
+      ok:false,
+      error:"Not enough credits"
+    };
   }
 
   user.credits -= amount;
   user.requests += 1;
   await user.save();
 
-  return true;
+  return {
+    ok:true
+  };
 }
 
 /* =========================
@@ -141,10 +154,12 @@ app.get("/me",authMiddleware,(req,res)=>{
    TEXT
 ========================= */
 app.post("/generate-text",authMiddleware,async(req,res)=>{
-  const allowed = await deductCredits(req.user, COSTS.text);
+  const creditCheck = await deductCredits(req.user, COSTS.text);
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
+  if(!creditCheck.ok){
+    return res.status(403).json({
+      error:creditCheck.error
+    });
   }
 
   try{
@@ -192,10 +207,12 @@ app.post("/generate-text",authMiddleware,async(req,res)=>{
    IMAGE
 ========================= */
 app.post("/generate-image",authMiddleware,async(req,res)=>{
-  const allowed = await deductCredits(req.user, COSTS.image);
+  const creditCheck = await deductCredits(req.user, COSTS.image);
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
+  if(!creditCheck.ok){
+    return res.status(403).json({
+      error:creditCheck.error
+    });
   }
 
   const { prompt } = req.body;
@@ -211,10 +228,12 @@ app.post("/generate-image",authMiddleware,async(req,res)=>{
    VIDEO
 ========================= */
 app.post("/generate-video",authMiddleware,async(req,res)=>{
-  const allowed = await deductCredits(req.user, COSTS.video);
+  const creditCheck = await deductCredits(req.user, COSTS.video);
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
+  if(!creditCheck.ok){
+    return res.status(403).json({
+      error:creditCheck.error
+    });
   }
 
   try{
