@@ -45,7 +45,7 @@ if (process.env.MONGODB_URI) {
 }
 
 /* =========================
-   USER MODEL
+   MODELS
 ========================= */
 const userSchema = new mongoose.Schema({
   uid: String,
@@ -54,7 +54,19 @@ const userSchema = new mongoose.Schema({
   requests: { type: Number, default: 0 }
 });
 
+const transactionSchema = new mongoose.Schema({
+  email: String,
+  type: String,
+  amount: Number,
+  description: String,
+  date: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 const User = mongoose.models.User || mongoose.model("User", userSchema);
+const Transaction = mongoose.models.Transaction || mongoose.model("Transaction", transactionSchema);
 
 /* =========================
    COSTS
@@ -66,9 +78,23 @@ const COSTS = {
 };
 
 /* =========================
+   TRANSACTION LOG
+========================= */
+async function logTransaction(email, type, amount, description){
+  try{
+    await Transaction.create({
+      email,
+      type,
+      amount,
+      description
+    });
+  }catch{}
+}
+
+/* =========================
    CREDIT
 ========================= */
-async function deductCredits(user, amount) {
+async function deductCredits(user, amount, mode){
   if (!user) return true;
 
   if (user.credits < amount) {
@@ -78,6 +104,13 @@ async function deductCredits(user, amount) {
   user.credits -= amount;
   user.requests += 1;
   await user.save();
+
+  await logTransaction(
+    user.email,
+    "Generation",
+    -amount,
+    `${mode} generation`
+  );
 
   return true;
 }
@@ -141,10 +174,83 @@ app.get("/me", auth, (req, res) => {
 });
 
 /* =========================
+   TRANSACTIONS
+========================= */
+app.get("/transactions", auth, async (req, res) => {
+  if(!req.user){
+    return res.json([]);
+  }
+
+  try{
+    const transactions = await Transaction.find({
+      email: req.user.email
+    })
+    .sort({ date: -1 })
+    .limit(20);
+
+    res.json(transactions);
+
+  }catch{
+    res.status(500).json({
+      error: "Failed to load transactions"
+    });
+  }
+});
+
+/* =========================
+   PAYMENT WEBHOOK
+========================= */
+app.post("/payment-webhook", async (req, res) => {
+  try{
+    const { email, amount } = req.body;
+
+    if(!email){
+      return res.status(400).json({
+        error: "Missing email"
+      });
+    }
+
+    let creditsToAdd = 0;
+
+    if(amount >= 25){
+      creditsToAdd = 9999;
+    }else if(amount >= 12){
+      creditsToAdd = 150;
+    }else if(amount >= 5){
+      creditsToAdd = 50;
+    }
+
+    const user = await User.findOne({ email });
+
+    if(user){
+      user.credits += creditsToAdd;
+      await user.save();
+
+      await logTransaction(
+        email,
+        "Payment",
+        creditsToAdd,
+        "Credits purchased"
+      );
+    }
+
+    res.json({
+      success:true,
+      added:creditsToAdd
+    });
+
+  }catch{
+    res.status(500).json({
+      error:"Webhook failed"
+    });
+  }
+});
+
+/* =========================
    GENERATE TEXT
 ========================= */
 app.post("/generate-text", auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.text);
+  const allowed = await deductCredits(req.user, COSTS.text, "Text");
 
   if (!allowed) {
     return res.status(403).json({ error: "Not enough credits" });
@@ -194,7 +300,7 @@ app.post("/generate-text", auth, async (req, res) => {
    GENERATE IMAGE
 ========================= */
 app.post("/generate-image", auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.image);
+  const allowed = await deductCredits(req.user, COSTS.image, "Image");
 
   if (!allowed) {
     return res.status(403).json({ error: "Not enough credits" });
@@ -211,7 +317,7 @@ app.post("/generate-image", auth, async (req, res) => {
    GENERATE VIDEO
 ========================= */
 app.post("/generate-video", auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.video);
+  const allowed = await deductCredits(req.user, COSTS.video, "Video");
 
   if (!allowed) {
     return res.status(403).json({ error: "Not enough credits" });
