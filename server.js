@@ -7,52 +7,75 @@ const mongoose = require("mongoose");
 const admin = require("firebase-admin");
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+
+/* =========================
+   Middleware
+========================= */
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
-// =========================
-// FIREBASE ADMIN FIX
-// =========================
-admin.initializeApp({
-  credential: admin.credential.cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+/* =========================
+   Firebase Admin Init
+========================= */
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY
+          ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+          : undefined
+      })
+    });
+    console.log("✅ Firebase initialized");
+  }
+} catch (error) {
+  console.error("❌ Firebase init error:", error.message);
+}
+
+/* =========================
+   MongoDB
+========================= */
+const mongoUri = process.env.MONGODB_URI;
+
+console.log("Mongo URI exists:", !!mongoUri);
+
+if (!mongoUri) {
+  console.error("❌ MONGODB_URI missing");
+} else {
+  mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 5000
   })
-});
+  .then(() => {
+    console.log("✅ MongoDB connected");
+  })
+  .catch(err => {
+    console.error("❌ MongoDB error:", err.message);
+  });
+}
 
-// =========================
-// MONGODB
-// =========================
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log("✅ MongoDB connected"))
-.catch(err => console.log("❌ MongoDB error:", err));
-
-// =========================
-// USER MODEL
-// =========================
+/* =========================
+   User Schema
+========================= */
 const userSchema = new mongoose.Schema({
   uid: String,
   email: String,
-  credits: {
-    type: Number,
-    default: 100
-  },
-  requests: {
-    type: Number,
-    default: 0
-  }
+  credits: { type: Number, default: 50 },
+  requests: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
 });
 
-const User = mongoose.model("User", userSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
 
-// =========================
-// AUTH MIDDLEWARE
-// =========================
-async function verifyUser(req, res, next) {
+/* =========================
+   Auth Middleware
+========================= */
+async function authMiddleware(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
+    const header = req.headers.authorization || "";
+    const token = header.replace("Bearer ", "");
 
     if (!token) {
       req.user = null;
@@ -66,38 +89,34 @@ async function verifyUser(req, res, next) {
     if (!user) {
       user = await User.create({
         uid: decoded.uid,
-        email: decoded.email,
-        credits: 100
+        email: decoded.email
       });
     }
 
     req.user = user;
     next();
-  } catch (err) {
-    console.log("Auth error:", err.message);
+  } catch (error) {
+    console.error("Auth error:", error.message);
     req.user = null;
     next();
   }
 }
 
-// =========================
-// HOME
-// =========================
+/* =========================
+   Health Check
+========================= */
 app.get("/", (req, res) => {
   res.json({
-    success: true,
-    message: "🚀 ReelMind backend running"
+    status: "ReelMind backend running"
   });
 });
 
-// =========================
-// USER INFO
-// =========================
-app.get("/me", verifyUser, async (req, res) => {
+/* =========================
+   Current User
+========================= */
+app.get("/me", authMiddleware, async (req, res) => {
   if (!req.user) {
-    return res.json({
-      credits: "∞"
-    });
+    return res.json({ credits: 0 });
   }
 
   res.json({
@@ -106,73 +125,69 @@ app.get("/me", verifyUser, async (req, res) => {
   });
 });
 
-// =========================
-// GENERATE TEXT / STORIES
-// =========================
-app.post("/generate-text", verifyUser, async (req, res) => {
+/* =========================
+   Generate Text
+========================= */
+app.post("/generate-text", authMiddleware, async (req, res) => {
   try {
     const { prompt, language } = req.body;
 
-    const fullPrompt = `
-Write a detailed cinematic story in ${language || "English"}.
-Make it long, engaging, emotional and high quality.
-Prompt:
-${prompt}
+    const finalPrompt = `
+Write a detailed, long, cinematic story in ${language || "English"}.
+Prompt: ${prompt}
 `;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_KEY}`,
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
+        model: "openai/gpt-4.1-mini",
         messages: [
           {
             role: "user",
-            content: fullPrompt
+            content: finalPrompt
           }
-        ],
-        max_tokens: 3000
+        ]
       })
     });
 
     const data = await response.json();
 
+    const content =
+      data?.choices?.[0]?.message?.content ||
+      "No story generated.";
+
     if (req.user) {
-      req.user.credits -= 1;
       req.user.requests += 1;
       await req.user.save();
     }
 
     res.json({
       data: {
-        content:
-          data?.choices?.[0]?.message?.content ||
-          "No response"
+        content
       }
     });
-
-  } catch (err) {
+  } catch (error) {
+    console.error(error);
     res.status(500).json({
-      error: err.message
+      error: "Text generation failed"
     });
   }
 });
 
-// =========================
-// GENERATE IMAGE
-// =========================
-app.post("/generate-image", verifyUser, async (req, res) => {
+/* =========================
+   Generate Image
+========================= */
+app.post("/generate-image", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const imageUrl =
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
 
     if (req.user) {
-      req.user.credits -= 1;
       req.user.requests += 1;
       await req.user.save();
     }
@@ -182,49 +197,43 @@ app.post("/generate-image", verifyUser, async (req, res) => {
         url: imageUrl
       }
     });
-
-  } catch (err) {
+  } catch (error) {
     res.status(500).json({
-      error: err.message
+      error: "Image generation failed"
     });
   }
 });
 
-// =========================
-// GENERATE VIDEO PLACEHOLDER
-// =========================
-app.post("/generate-video", verifyUser, async (req, res) => {
-  res.json({
-    preview: "",
-    message: "Video generation backend can be connected later."
-  });
-});
-
-// =========================
-// ADMIN
-// =========================
+/* =========================
+   Admin Stats
+========================= */
 app.get("/admin", async (req, res) => {
-  const users = await User.countDocuments();
-  const total = await User.aggregate([
-    {
-      $group: {
-        _id: null,
-        requests: { $sum: "$requests" }
+  try {
+    const users = await User.countDocuments();
+    const totals = await User.aggregate([
+      {
+        $group: {
+          _id: null,
+          requests: { $sum: "$requests" }
+        }
       }
-    }
-  ]);
+    ]);
 
-  res.json({
-    users,
-    requests: total[0]?.requests || 0
-  });
+    res.json({
+      users,
+      requests: totals[0]?.requests || 0
+    });
+  } catch (error) {
+    res.status(500).json({
+      users: 0,
+      requests: 0
+    });
+  }
 });
 
-// =========================
-// START SERVER
-// =========================
-const PORT = process.env.PORT || 3000;
-
+/* =========================
+   Start Server
+========================= */
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
