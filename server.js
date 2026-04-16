@@ -15,7 +15,7 @@ const HOST = "0.0.0.0";
 ========================= */
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended:true }));
 
 /* =========================
    FIREBASE
@@ -58,22 +58,6 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 /* =========================
-   HISTORY MODEL
-========================= */
-const historySchema = new mongoose.Schema({
-  uid:String,
-  mode:String,
-  prompt:String,
-  result:String,
-  createdAt:{
-    type:Date,
-    default:Date.now
-  }
-});
-
-const History = mongoose.models.History || mongoose.model("History", historySchema);
-
-/* =========================
    COSTS
 ========================= */
 const COSTS = {
@@ -82,31 +66,18 @@ const COSTS = {
   video:5
 };
 
-/* =========================
-   CREDIT CHECK
-========================= */
 async function deductCredits(user, amount){
-  if(!user){
-    return {
-      ok:false,
-      error:"Please login first"
-    };
-  }
+  if(!user) return true;
 
   if(user.credits < amount){
-    return {
-      ok:false,
-      error:"Not enough credits"
-    };
+    return false;
   }
 
   user.credits -= amount;
   user.requests += 1;
   await user.save();
 
-  return {
-    ok:true
-  };
+  return true;
 }
 
 /* =========================
@@ -134,6 +105,7 @@ async function authMiddleware(req,res,next){
 
     req.user = user;
     next();
+
   }catch{
     req.user = null;
     next();
@@ -150,9 +122,9 @@ app.get("/",(req,res)=>{
 });
 
 /* =========================
-   USER PROFILE
+   PROFILE
 ========================= */
-app.get("/me",authMiddleware,(req,res)=>{
+app.get("/me", authMiddleware, (req,res)=>{
   if(!req.user){
     return res.json({
       email:"Guest",
@@ -167,29 +139,14 @@ app.get("/me",authMiddleware,(req,res)=>{
 });
 
 /* =========================
-   USER HISTORY
-========================= */
-app.get("/history",authMiddleware,async(req,res)=>{
-  if(!req.user){
-    return res.json([]);
-  }
-
-  const items = await History.find({ uid:req.user.uid })
-    .sort({ createdAt:-1 })
-    .limit(30);
-
-  res.json(items);
-});
-
-/* =========================
    TEXT
 ========================= */
-app.post("/generate-text",authMiddleware,async(req,res)=>{
-  const creditCheck = await deductCredits(req.user, COSTS.text);
+app.post("/generate-text", authMiddleware, async(req,res)=>{
+  const allowed = await deductCredits(req.user, COSTS.text);
 
-  if(!creditCheck.ok){
+  if(!allowed){
     return res.status(403).json({
-      error:creditCheck.error
+      error:"Not enough credits"
     });
   }
 
@@ -220,26 +177,18 @@ app.post("/generate-text",authMiddleware,async(req,res)=>{
     });
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content || "No response";
-
-    if(req.user){
-      await History.create({
-        uid:req.user.uid,
-        mode:"text",
-        prompt,
-        result:content
-      });
-    }
 
     res.json({
       data:{
-        content
+        content:data?.choices?.[0]?.message?.content || "No response"
       }
     });
 
   }catch{
     res.json({
-      data:{ content:"Story generation failed" }
+      data:{
+        content:"Story generation failed"
+      }
     });
   }
 });
@@ -247,30 +196,20 @@ app.post("/generate-text",authMiddleware,async(req,res)=>{
 /* =========================
    IMAGE
 ========================= */
-app.post("/generate-image",authMiddleware,async(req,res)=>{
-  const creditCheck = await deductCredits(req.user, COSTS.image);
+app.post("/generate-image", authMiddleware, async(req,res)=>{
+  const allowed = await deductCredits(req.user, COSTS.image);
 
-  if(!creditCheck.ok){
+  if(!allowed){
     return res.status(403).json({
-      error:creditCheck.error
+      error:"Not enough credits"
     });
   }
 
   const { prompt } = req.body;
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
-
-  if(req.user){
-    await History.create({
-      uid:req.user.uid,
-      mode:"image",
-      prompt,
-      result:imageUrl
-    });
-  }
 
   res.json({
     data:{
-      url:imageUrl
+      url:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
     }
   });
 });
@@ -278,12 +217,12 @@ app.post("/generate-image",authMiddleware,async(req,res)=>{
 /* =========================
    VIDEO
 ========================= */
-app.post("/generate-video",authMiddleware,async(req,res)=>{
-  const creditCheck = await deductCredits(req.user, COSTS.video);
+app.post("/generate-video", authMiddleware, async(req,res)=>{
+  const allowed = await deductCredits(req.user, COSTS.video);
 
-  if(!creditCheck.ok){
+  if(!allowed){
     return res.status(403).json({
-      error:creditCheck.error
+      error:"Not enough credits"
     });
   }
 
@@ -307,15 +246,6 @@ app.post("/generate-video",authMiddleware,async(req,res)=>{
 
     const data = await response.json();
 
-    if(req.user){
-      await History.create({
-        uid:req.user.uid,
-        mode:"video",
-        prompt,
-        result:data?.output?.[0] || data?.id || ""
-      });
-    }
-
     res.json({
       taskId:data?.id || null,
       preview:data?.output?.[0] || null
@@ -331,7 +261,7 @@ app.post("/generate-video",authMiddleware,async(req,res)=>{
 /* =========================
    VIDEO STATUS
 ========================= */
-app.get("/video-status/:taskId",async(req,res)=>{
+app.get("/video-status/:taskId", async(req,res)=>{
   try{
     const response = await fetch(
       `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
