@@ -10,6 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
 
+const ADMIN_EMAIL = "neavyartical@gmail.com";
+
 /* =========================
    MIDDLEWARE
 ========================= */
@@ -78,7 +80,7 @@ const COSTS = {
 };
 
 /* =========================
-   TRANSACTION LOG
+   LOG TRANSACTION
 ========================= */
 async function logTransaction(email, type, amount, description){
   try{
@@ -92,12 +94,12 @@ async function logTransaction(email, type, amount, description){
 }
 
 /* =========================
-   CREDIT
+   DEDUCT CREDITS
 ========================= */
 async function deductCredits(user, amount, mode){
-  if (!user) return true;
+  if(!user) return true;
 
-  if (user.credits < amount) {
+  if(user.credits < amount){
     return false;
   }
 
@@ -118,11 +120,11 @@ async function deductCredits(user, amount, mode){
 /* =========================
    AUTH
 ========================= */
-async function auth(req, res, next) {
-  try {
+async function auth(req, res, next){
+  try{
     const token = (req.headers.authorization || "").replace("Bearer ", "");
 
-    if (!token) {
+    if(!token){
       req.user = null;
       return next();
     }
@@ -131,7 +133,7 @@ async function auth(req, res, next) {
 
     let user = await User.findOne({ uid: decoded.uid });
 
-    if (!user) {
+    if(!user){
       user = await User.create({
         uid: decoded.uid,
         email: decoded.email
@@ -141,16 +143,29 @@ async function auth(req, res, next) {
     req.user = user;
     next();
 
-  } catch {
+  }catch{
     req.user = null;
     next();
   }
 }
 
 /* =========================
+   ADMIN PROTECTION
+========================= */
+function adminOnly(req, res, next){
+  if(!req.user || req.user.email !== ADMIN_EMAIL){
+    return res.status(403).json({
+      error: "Access denied"
+    });
+  }
+
+  next();
+}
+
+/* =========================
    ROOT
 ========================= */
-app.get("/", (req, res) => {
+app.get("/", (req, res)=>{
   res.json({
     status: "ReelMind backend running"
   });
@@ -159,8 +174,8 @@ app.get("/", (req, res) => {
 /* =========================
    PROFILE
 ========================= */
-app.get("/me", auth, (req, res) => {
-  if (!req.user) {
+app.get("/me", auth, (req, res)=>{
+  if(!req.user){
     return res.json({
       email: "Guest",
       credits: 0
@@ -176,7 +191,7 @@ app.get("/me", auth, (req, res) => {
 /* =========================
    TRANSACTIONS
 ========================= */
-app.get("/transactions", auth, async (req, res) => {
+app.get("/transactions", auth, async (req, res)=>{
   if(!req.user){
     return res.json([]);
   }
@@ -198,11 +213,55 @@ app.get("/transactions", auth, async (req, res) => {
 });
 
 /* =========================
+   ADMIN DASHBOARD
+========================= */
+app.get("/admin-dashboard", auth, adminOnly, async (req, res)=>{
+  try{
+    const totalUsers = await User.countDocuments();
+    const totalTransactions = await Transaction.countDocuments();
+
+    const totalGenerations = await Transaction.countDocuments({
+      type: "Generation"
+    });
+
+    const payments = await Transaction.find({
+      type: "Payment"
+    });
+
+    const totalRevenue = payments.reduce((sum, item)=>{
+      if(item.amount >= 9999) return sum + 25;
+      if(item.amount >= 150) return sum + 12;
+      if(item.amount >= 50) return sum + 5;
+      return sum;
+    },0);
+
+    const recentUsers = await User.find()
+      .sort({ _id: -1 })
+      .limit(10)
+      .select("email credits requests");
+
+    res.json({
+      totalUsers,
+      totalTransactions,
+      totalGenerations,
+      totalRevenue,
+      recentUsers
+    });
+
+  }catch{
+    res.status(500).json({
+      error: "Dashboard failed"
+    });
+  }
+});
+
+/* =========================
    PAYMENT WEBHOOK
 ========================= */
-app.post("/payment-webhook", async (req, res) => {
+app.post("/payment-webhook", async (req, res)=>{
   try{
-    const { email, amount } = req.body;
+    const email = req.body.email;
+    const amount = Number(req.body.amount || 0);
 
     if(!email){
       return res.status(400).json({
@@ -235,13 +294,13 @@ app.post("/payment-webhook", async (req, res) => {
     }
 
     res.json({
-      success:true,
-      added:creditsToAdd
+      success: true,
+      added: creditsToAdd
     });
 
   }catch{
     res.status(500).json({
-      error:"Webhook failed"
+      error: "Webhook failed"
     });
   }
 });
@@ -249,14 +308,14 @@ app.post("/payment-webhook", async (req, res) => {
 /* =========================
    GENERATE TEXT
 ========================= */
-app.post("/generate-text", auth, async (req, res) => {
+app.post("/generate-text", auth, async (req, res)=>{
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
 
-  if (!allowed) {
+  if(!allowed){
     return res.status(403).json({ error: "Not enough credits" });
   }
 
-  try {
+  try{
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -266,14 +325,8 @@ app.post("/generate-text", auth, async (req, res) => {
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
         messages: [
-          {
-            role: "system",
-            content: "Write cinematic immersive stories."
-          },
-          {
-            role: "user",
-            content: req.body.prompt
-          }
+          { role: "system", content: "Write cinematic immersive stories." },
+          { role: "user", content: req.body.prompt }
         ]
       }),
       timeout: 15000
@@ -282,14 +335,14 @@ app.post("/generate-text", auth, async (req, res) => {
     const data = await response.json();
 
     res.json({
-      data: {
+      data:{
         content: data?.choices?.[0]?.message?.content || "No response"
       }
     });
 
-  } catch {
+  }catch{
     res.json({
-      data: {
+      data:{
         content: "Story generation failed"
       }
     });
@@ -299,31 +352,31 @@ app.post("/generate-text", auth, async (req, res) => {
 /* =========================
    GENERATE IMAGE
 ========================= */
-app.post("/generate-image", auth, async (req, res) => {
+app.post("/generate-image", auth, async (req, res)=>{
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
 
-  if (!allowed) {
+  if(!allowed){
     return res.status(403).json({ error: "Not enough credits" });
   }
 
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
 
   res.json({
-    data: { url }
+    data:{ url }
   });
 });
 
 /* =========================
    GENERATE VIDEO
 ========================= */
-app.post("/generate-video", auth, async (req, res) => {
+app.post("/generate-video", auth, async (req, res)=>{
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
 
-  if (!allowed) {
+  if(!allowed){
     return res.status(403).json({ error: "Not enough credits" });
   }
 
-  try {
+  try{
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
@@ -347,7 +400,7 @@ app.post("/generate-video", auth, async (req, res) => {
       preview: data?.output?.[0] || null
     });
 
-  } catch {
+  }catch{
     res.json({
       error: "Video generation failed"
     });
@@ -357,16 +410,16 @@ app.post("/generate-video", auth, async (req, res) => {
 /* =========================
    VIDEO STATUS
 ========================= */
-app.get("/video-status/:taskId", async (req, res) => {
-  try {
+app.get("/video-status/:taskId", async (req, res)=>{
+  try{
     const response = await fetch(
       `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
       {
-        headers: {
-          Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-          "X-Runway-Version": "2024-11-06"
+        headers:{
+          Authorization:`Bearer ${process.env.RUNWAY_API_KEY}`,
+          "X-Runway-Version":"2024-11-06"
         },
-        timeout: 10000
+        timeout:10000
       }
     );
 
@@ -377,10 +430,10 @@ app.get("/video-status/:taskId", async (req, res) => {
       video: data?.output?.[0] || null
     });
 
-  } catch {
+  }catch{
     res.json({
-      status: "failed",
-      video: null
+      status:"failed",
+      video:null
     });
   }
 });
@@ -388,6 +441,6 @@ app.get("/video-status/:taskId", async (req, res) => {
 /* =========================
    START
 ========================= */
-app.listen(PORT, HOST, () => {
+app.listen(PORT, HOST, ()=>{
   console.log(`Server running on ${HOST}:${PORT}`);
 });
