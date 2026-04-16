@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
 /* =========================
-   Firebase
+   Firebase Init
 ========================= */
 try {
   if (!admin.apps.length) {
@@ -32,7 +32,7 @@ try {
     console.log("✅ Firebase initialized");
   }
 } catch (error) {
-  console.error("❌ Firebase error:", error.message);
+  console.log("Firebase error:", error.message);
 }
 
 /* =========================
@@ -41,11 +41,11 @@ try {
 if (process.env.MONGODB_URI) {
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("✅ MongoDB connected"))
-    .catch(err => console.log("❌ Mongo error:", err.message));
+    .catch(err => console.log("MongoDB error:", err.message));
 }
 
 /* =========================
-   User Model
+   User Schema
 ========================= */
 const userSchema = new mongoose.Schema({
   uid: String,
@@ -62,8 +62,7 @@ const User = mongoose.models.User || mongoose.model("User", userSchema);
 ========================= */
 async function authMiddleware(req, res, next) {
   try {
-    const header = req.headers.authorization || "";
-    const token = header.replace("Bearer ", "");
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
 
     if (!token) {
       req.user = null;
@@ -94,7 +93,9 @@ async function authMiddleware(req, res, next) {
    Root
 ========================= */
 app.get("/", (req, res) => {
-  res.json({ status: "Backend LIVE" });
+  res.json({
+    status: "Backend LIVE"
+  });
 });
 
 /* =========================
@@ -128,7 +129,9 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
     });
 
   } catch {
-    res.status(500).json({ error: "Text generation failed" });
+    res.status(500).json({
+      error: "Text generation failed"
+    });
   }
 });
 
@@ -149,7 +152,9 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
     });
 
   } catch {
-    res.status(500).json({ error: "Image generation failed" });
+    res.status(500).json({
+      error: "Image generation failed"
+    });
   }
 });
 
@@ -163,50 +168,31 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     const createRes = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-        "Content-Type": "application/json"
+        "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
       },
       body: JSON.stringify({
-        model: "gen3a_turbo",
-        promptText: prompt
+        model: "gen4.5",
+        promptText: prompt,
+        ratio: "1280:720",
+        duration: 5
       })
     });
 
     const createData = await createRes.json();
-    console.log("Runway create:", JSON.stringify(createData, null, 2));
+    console.log("Runway:", JSON.stringify(createData, null, 2));
 
-    const taskId = createData?.id;
-
-    if (!taskId) {
+    if (!createRes.ok) {
       return res.status(500).json({
         error: createData
       });
     }
 
-    await new Promise(resolve => setTimeout(resolve, 15000));
-
-    const statusRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`
-      }
-    });
-
-    const statusData = await statusRes.json();
-    console.log("Runway status:", JSON.stringify(statusData, null, 2));
-
-    const videoUrl =
-      statusData?.output?.video ||
-      statusData?.output?.[0] ||
-      null;
-
-    if (!videoUrl) {
-      return res.status(500).json({
-        error: statusData
-      });
-    }
-
     res.json({
-      preview: videoUrl
+      success: true,
+      taskId: createData.id,
+      status: createData.status
     });
 
   } catch (error) {
@@ -223,7 +209,10 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
 ========================= */
 app.get("/admin", async (req, res) => {
   const users = await User.countDocuments();
-  res.json({ users });
+
+  res.json({
+    users
+  });
 });
 
 /* =========================
