@@ -38,9 +38,13 @@ try {
 /* =========================
    MongoDB
 ========================= */
-mongoose.connect(process.env.MONGODB_URI)
-.then(() => console.log("✅ MongoDB connected"))
-.catch(err => console.error("❌ MongoDB error:", err.message));
+if (!process.env.MONGODB_URI) {
+  console.error("❌ Missing MONGODB_URI");
+} else {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.error("❌ MongoDB error:", err.message));
+}
 
 /* =========================
    User Schema
@@ -60,8 +64,8 @@ const User = mongoose.models.User || mongoose.model("User", userSchema);
 ========================= */
 async function authMiddleware(req, res, next) {
   try {
-    const header = req.headers.authorization || "";
-    const token = header.replace("Bearer ", "");
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
 
     if (!token) {
       req.user = null;
@@ -81,22 +85,24 @@ async function authMiddleware(req, res, next) {
 
     req.user = user;
     next();
-
   } catch (error) {
+    console.error("Auth error:", error.message);
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   Root
+   Health Check
 ========================= */
 app.get("/", (req, res) => {
-  res.json({ status: "ReelMind backend running" });
+  res.json({
+    status: "ReelMind backend running"
+  });
 });
 
 /* =========================
-   User Info
+   Current User
 ========================= */
 app.get("/me", authMiddleware, async (req, res) => {
   if (!req.user) {
@@ -105,19 +111,20 @@ app.get("/me", authMiddleware, async (req, res) => {
 
   res.json({
     email: req.user.email,
-    credits: req.user.credits
+    credits: req.user.credits,
+    requests: req.user.requests
   });
 });
 
 /* =========================
-   Generate Text
+   Generate Story
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   try {
     const { prompt, language } = req.body;
 
     const finalPrompt = `
-Write a long cinematic story in ${language || "English"}.
+Create a cinematic, intelligent, highly detailed story in ${language || "English"}.
 Prompt: ${prompt}
 `;
 
@@ -149,8 +156,10 @@ Prompt: ${prompt}
     });
 
   } catch (error) {
-    console.error("Text error:", error.message);
-    res.status(500).json({ error: "Text generation failed" });
+    console.error(error);
+    res.status(500).json({
+      error: "Text generation failed"
+    });
   }
 });
 
@@ -170,26 +179,79 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
     }
 
     res.json({
-      data: {
-        url: imageUrl
-      }
+      data: { url: imageUrl }
     });
 
   } catch (error) {
-    res.status(500).json({ error: "Image generation failed" });
+    res.status(500).json({
+      error: "Image generation failed"
+    });
   }
 });
 
 /* =========================
-   Generate Video
+   Generate Video (Runway)
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    // temporary demo video placeholder
-    const preview =
-      "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+    const createTask = await fetch("https://api.runwayml.com/v1/text_to_video", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
+      },
+      body: JSON.stringify({
+        model: "gen4.5",
+        promptText: prompt,
+        ratio: "1280:720",
+        duration: 5
+      })
+    });
+
+    const task = await createTask.json();
+
+    if (!task.id) {
+      return res.status(500).json({
+        error: "Runway task creation failed",
+        details: task
+      });
+    }
+
+    let videoUrl = null;
+
+    for (let i = 0; i < 24; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+
+      const statusRes = await fetch(
+        `https://api.runwayml.com/v1/tasks/${task.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+            "X-Runway-Version": "2024-11-06"
+          }
+        }
+      );
+
+      const statusData = await statusRes.json();
+
+      if (statusData.status === "SUCCEEDED") {
+        videoUrl = statusData.output?.[0];
+        break;
+      }
+
+      if (statusData.status === "FAILED") {
+        break;
+      }
+    }
+
+    if (!videoUrl) {
+      return res.status(500).json({
+        error: "Video generation failed"
+      });
+    }
 
     if (req.user) {
       req.user.requests += 1;
@@ -197,11 +259,12 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     }
 
     res.json({
-      preview
+      preview: videoUrl
     });
 
   } catch (error) {
-    console.error("Video error:", error.message);
+    console.error("Runway error:", error.message);
+
     res.status(500).json({
       error: "Video generation failed"
     });
