@@ -1,158 +1,206 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
-const admin = require("firebase-admin");
+const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const admin = require("firebase-admin");
 
 const app = express();
+app.use(cors());
+app.use(express.json({ limit: "20mb" }));
 
-app.use(cors({ origin: "*" }));
-app.use(express.json());
+// ================= FIREBASE =================
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY
+        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+        : undefined
+    })
+  });
+}
 
-// ================= FIREBASE ADMIN =================
-admin.initializeApp({
-  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
-});
+// ================= MONGODB SAFE CONNECT =================
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI missing in Render Environment");
+} else {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.error("❌ MongoDB error:", err.message));
+}
 
-// ================= MONGODB =================
-mongoose.connect(process.env.MONGODB_URI);
-
-const userSchema = new mongoose.Schema({
+// ================= DATABASE =================
+const historySchema = new mongoose.Schema({
   uid: String,
-  email: String,
-  credits: { type: Number, default: 20 }
+  prompt: String,
+  response: String,
+  mode: String,
+  createdAt: { type: Date, default: Date.now }
 });
 
-const User = mongoose.model("User", userSchema);
+const History = mongoose.models.History || mongoose.model("History", historySchema);
 
 // ================= AUTH =================
-async function auth(req, res, next){
-  try{
-    const bearer = req.headers.authorization;
-    if(!bearer) return next();
+async function verifyUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.replace("Bearer ", "");
 
-    const token = bearer.split(" ")[1];
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
     const decoded = await admin.auth().verifyIdToken(token);
     req.user = decoded;
     next();
-  }catch{
+
+  } catch (err) {
+    req.user = null;
     next();
   }
 }
 
-app.use(auth);
+// ================= AI FUNCTION =================
+async function generateText(prompt, language = "English") {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "openai/gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content:
+            `You are ReelMind AI. Generate detailed long high-quality content in ${language}.`
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 2000
+    })
+  });
 
-// ================= USER =================
-app.get("/me", async (req,res)=>{
-  if(!req.user){
-    return res.json({ guest:true, credits:"∞" });
-  }
+  const data = await res.json();
 
-  let user = await User.findOne({ uid:req.user.uid });
+  return (
+    data?.choices?.[0]?.message?.content ||
+    "No response from AI"
+  );
+}
 
-  if(!user){
-    user = await User.create({
-      uid:req.user.uid,
-      email:req.user.email,
-      credits:20
-    });
-  }
-
-  res.json(user);
+// ================= ROOT =================
+app.get("/", (req, res) => {
+  res.send("Backend LIVE");
 });
 
-// ================= TEXT =================
-app.post("/generate-text", async (req,res)=>{
-  try{
-    const { prompt, language } = req.body;
-
-    const reply = await fetch("https://openrouter.ai/api/v1/chat/completions",{
-      method:"POST",
-      headers:{
-        "Authorization":`Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        model:"openai/gpt-4o-mini",
-        messages:[
-          {
-            role:"system",
-            content:`Respond fluently in ${language || "English"}.
-Generate detailed unlimited responses.
-Understand any world language including Krio, Temne, Limba and Mende.`
-          },
-          {
-            role:"user",
-            content:prompt
-          }
-        ]
-      })
-    });
-
-    const data = await reply.json();
-
-    if(req.user){
-      await User.updateOne(
-        { uid:req.user.uid },
-        { $inc:{ credits:-1 } }
-      );
-    }
-
-    res.json({
-      data:{
-        content:data?.choices?.[0]?.message?.content || "No response"
-      }
-    });
-
-  }catch(err){
-    res.status(500).json({ error:"TEXT_FAILED" });
-  }
-});
-
-// ================= IMAGE =================
-app.post("/generate-image", async (req,res)=>{
-  const { prompt } = req.body;
-
+app.get("/health", (req, res) => {
   res.json({
-    data:{
-      url:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`
-    }
+    status: "ok",
+    mongodb: mongoose.connection.readyState === 1
   });
 });
 
-// ================= VIDEO =================
-app.post("/generate-video", async (req,res)=>{
+// ================= USER =================
+app.get("/me", verifyUser, async (req, res) => {
   res.json({
-    preview:"https://www.w3schools.com/html/mov_bbb.mp4"
+    email: req.user?.email || "Guest",
+    credits: req.user ? 100 : "∞"
+  });
+});
+
+// ================= GENERATE TEXT =================
+app.post("/generate-text", verifyUser, async (req, res) => {
+  try {
+    const { prompt, language } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: "Prompt required"
+      });
+    }
+
+    const output = await generateText(prompt, language);
+
+    if (req.user && mongoose.connection.readyState === 1) {
+      await History.create({
+        uid: req.user.uid,
+        prompt,
+        response: output,
+        mode: "text"
+      });
+    }
+
+    res.json({
+      data: {
+        content: output
+      }
+    });
+
+  } catch (err) {
+    console.error("TEXT ERROR:", err.message);
+
+    res.status(500).json({
+      data: {
+        content: "Failed generating text"
+      }
+    });
+  }
+});
+
+// ================= GENERATE IMAGE =================
+app.post("/generate-image", verifyUser, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    const url =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
+
+    res.json({
+      data: {
+        url
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      error: "Image generation failed"
+    });
+  }
+});
+
+// ================= GENERATE VIDEO =================
+app.post("/generate-video", verifyUser, async (req, res) => {
+  res.json({
+    preview: null
   });
 });
 
 // ================= ADMIN =================
-app.get("/admin", async (req,res)=>{
-  const users = await User.countDocuments();
+app.get("/admin", async (req, res) => {
+  const requests =
+    mongoose.connection.readyState === 1
+      ? await History.countDocuments()
+      : 0;
+
   res.json({
-    users,
-    requests:"Live"
+    users: "Live",
+    requests
   });
 });
 
-// ================= KO-FI =================
-app.post("/kofi-webhook", async (req,res)=>{
-  const { email } = req.body;
-
-  await User.updateOne(
-    { email },
-    { $inc:{ credits:50 } }
-  );
-
-  res.send("OK");
-});
-
-// ================= ROOT =================
-app.get("/", (req,res)=>{
-  res.send("ReelMind backend live");
-});
-
+// ================= START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=> console.log("Server running on " + PORT));
+
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
+});
