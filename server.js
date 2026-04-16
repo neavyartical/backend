@@ -38,23 +38,9 @@ try {
 /* =========================
    MongoDB
 ========================= */
-const mongoUri = process.env.MONGODB_URI;
-
-console.log("Mongo URI exists:", !!mongoUri);
-
-if (!mongoUri) {
-  console.error("❌ MONGODB_URI missing");
-} else {
-  mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 5000
-  })
-  .then(() => {
-    console.log("✅ MongoDB connected");
-  })
-  .catch(err => {
-    console.error("❌ MongoDB error:", err.message);
-  });
-}
+mongoose.connect(process.env.MONGODB_URI)
+.then(() => console.log("✅ MongoDB connected"))
+.catch(err => console.error("❌ MongoDB error:", err.message));
 
 /* =========================
    User Schema
@@ -95,24 +81,22 @@ async function authMiddleware(req, res, next) {
 
     req.user = user;
     next();
+
   } catch (error) {
-    console.error("Auth error:", error.message);
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   Health Check
+   Root
 ========================= */
 app.get("/", (req, res) => {
-  res.json({
-    status: "ReelMind backend running"
-  });
+  res.json({ status: "ReelMind backend running" });
 });
 
 /* =========================
-   Current User
+   User Info
 ========================= */
 app.get("/me", authMiddleware, async (req, res) => {
   if (!req.user) {
@@ -133,7 +117,7 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
     const { prompt, language } = req.body;
 
     const finalPrompt = `
-Write a detailed, long, cinematic story in ${language || "English"}.
+Write a long cinematic story in ${language || "English"}.
 Prompt: ${prompt}
 `;
 
@@ -145,12 +129,7 @@ Prompt: ${prompt}
       },
       body: JSON.stringify({
         model: "openai/gpt-4.1-mini",
-        messages: [
-          {
-            role: "user",
-            content: finalPrompt
-          }
-        ]
+        messages: [{ role: "user", content: finalPrompt }]
       })
     });
 
@@ -166,15 +145,12 @@ Prompt: ${prompt}
     }
 
     res.json({
-      data: {
-        content
-      }
+      data: { content }
     });
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: "Text generation failed"
-    });
+    console.error("Text error:", error.message);
+    res.status(500).json({ error: "Text generation failed" });
   }
 });
 
@@ -185,7 +161,8 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
+    const imageUrl =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
 
     if (req.user) {
       req.user.requests += 1;
@@ -197,9 +174,36 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
         url: imageUrl
       }
     });
+
   } catch (error) {
+    res.status(500).json({ error: "Image generation failed" });
+  }
+});
+
+/* =========================
+   Generate Video
+========================= */
+app.post("/generate-video", authMiddleware, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    // temporary demo video placeholder
+    const preview =
+      "https://samplelib.com/lib/preview/mp4/sample-5s.mp4";
+
+    if (req.user) {
+      req.user.requests += 1;
+      await req.user.save();
+    }
+
+    res.json({
+      preview
+    });
+
+  } catch (error) {
+    console.error("Video error:", error.message);
     res.status(500).json({
-      error: "Image generation failed"
+      error: "Video generation failed"
     });
   }
 });
@@ -210,6 +214,7 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
 app.get("/admin", async (req, res) => {
   try {
     const users = await User.countDocuments();
+
     const totals = await User.aggregate([
       {
         $group: {
@@ -223,6 +228,7 @@ app.get("/admin", async (req, res) => {
       users,
       requests: totals[0]?.requests || 0
     });
+
   } catch (error) {
     res.status(500).json({
       users: 0,
