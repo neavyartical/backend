@@ -2,19 +2,22 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const fetch = require("node-fetch");
+const mongoose = require("mongoose");
 const admin = require("firebase-admin");
 const jwt = require("jsonwebtoken");
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
 /* =========================
-   BASIC MIDDLEWARE
+   MIDDLEWARE
 ========================= */
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 
 /* =========================
-   FIREBASE ADMIN INIT
+   FIREBASE
 ========================= */
 try {
   if (!admin.apps.length) {
@@ -26,33 +29,93 @@ try {
       })
     });
 
-    console.log("Firebase Admin connected successfully");
+    console.log("Firebase connected");
   }
 } catch (error) {
-  console.error("Firebase initialization error:", error.message);
+  console.error("Firebase error:", error.message);
 }
 
 /* =========================
-   AUTH MIDDLEWARE
+   MONGODB
+========================= */
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("MongoDB connected"))
+    .catch(err => console.error("MongoDB error:", err.message));
+}
+
+/* =========================
+   USER MODEL
+========================= */
+const userSchema = new mongoose.Schema({
+  uid: String,
+  email: String,
+  credits: {
+    type: Number,
+    default: 50
+  },
+  requests: {
+    type: Number,
+    default: 0
+  }
+});
+
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+
+/* =========================
+   JWT
+========================= */
+const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
+
+function createJWT(user){
+  return jwt.sign(
+    {
+      uid: user.uid,
+      email: user.email
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "30d"
+    }
+  );
+}
+
+/* =========================
+   AUTH
 ========================= */
 async function authMiddleware(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
+    const header = req.headers.authorization || "";
 
-    if (!authHeader.startsWith("Bearer ")) {
+    if (!header.startsWith("Bearer ")) {
       req.user = null;
       return next();
     }
 
-    const token = authHeader.split("Bearer ")[1];
+    const token = header.replace("Bearer ", "");
 
-    const decoded = await admin.auth().verifyIdToken(token);
+    let decoded = null;
 
-    req.user = decoded;
+    try {
+      decoded = await admin.auth().verifyIdToken(token);
+    } catch {
+      decoded = jwt.verify(token, JWT_SECRET);
+    }
+
+    let user = await User.findOne({ uid: decoded.uid });
+
+    if (!user) {
+      user = await User.create({
+        uid: decoded.uid,
+        email: decoded.email
+      });
+    }
+
+    req.user = user;
     next();
 
   } catch (error) {
-    console.error("Auth verify error:", error.message);
+    console.error("Auth error:", error.message);
     req.user = null;
     next();
   }
@@ -62,91 +125,100 @@ async function authMiddleware(req, res, next) {
    USER PROFILE
 ========================= */
 app.get("/me", authMiddleware, async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.json({
-        email: "Guest",
-        credits: 0
-      });
-    }
-
-    res.json({
-      email: req.user.email || "User",
-      credits: 50
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      error: "Unable to load profile"
+  if (!req.user) {
+    return res.json({
+      email: "Guest",
+      credits: 0
     });
   }
-});
 
-/* =========================
-   TEST AUTH
-========================= */
-app.get("/test-auth", authMiddleware, (req, res) => {
   res.json({
-    authenticated: !!req.user,
-    user: req.user || null
+    email: req.user.email,
+    credits: req.user.credits
   });
 });
 
 /* =========================
-   TEXT GENERATION
+   DEDUCT CREDITS
+========================= */
+async function deductCredits(user, amount){
+  if (!user) return true;
+
+  if (user.credits < amount) {
+    return false;
+  }
+
+  user.credits -= amount;
+  user.requests += 1;
+
+  await user.save();
+
+  return true;
+}
+
+/* =========================
+   GENERATE TEXT
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
+  const allowed = await deductCredits(req.user, 1);
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
+
   const { prompt } = req.body;
 
-  try {
-    res.json({
-      data: {
-        content: `Generated story for: ${prompt}`
-      }
-    });
-  } catch {
-    res.status(500).json({
-      error: "Text generation failed"
-    });
-  }
+  res.json({
+    data: {
+      content: `Generated story for: ${prompt}`
+    }
+  });
 });
 
 /* =========================
-   IMAGE GENERATION
+   GENERATE IMAGE
 ========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
-  try {
-    res.json({
-      data: {
-        url: "https://via.placeholder.com/800x450.png?text=Generated+Image"
-      }
-    });
-  } catch {
-    res.status(500).json({
-      error: "Image generation failed"
+  const allowed = await deductCredits(req.user, 2);
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
     });
   }
+
+  const { prompt } = req.body;
+
+  res.json({
+    data: {
+      url: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+    }
+  });
 });
 
 /* =========================
-   VIDEO GENERATION
+   GENERATE VIDEO
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
-  try {
-    res.json({
-      preview: "https://www.w3schools.com/html/mov_bbb.mp4"
-    });
-  } catch {
-    res.status(500).json({
-      error: "Video generation failed"
+  const allowed = await deductCredits(req.user, 5);
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
     });
   }
+
+  res.json({
+    preview: "https://www.w3schools.com/html/mov_bbb.mp4"
+  });
 });
 
 /* =========================
    VIDEO STATUS
 ========================= */
-app.get("/video-status/:id", async (req, res) => {
+app.get("/video-status/:taskId", async (req, res) => {
   res.json({
     video: "https://www.w3schools.com/html/mov_bbb.mp4"
   });
@@ -162,10 +234,8 @@ app.get("/", (req, res) => {
 });
 
 /* =========================
-   START SERVER
+   START
 ========================= */
-const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
