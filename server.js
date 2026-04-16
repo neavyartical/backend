@@ -130,14 +130,20 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
+        "X-Title": "ReelMind AI"
       },
       body: JSON.stringify({
-        model: "openai/gpt-4.1-mini",
+        model: "openai/gpt-4o-mini",
         messages: [
           {
+            role: "system",
+            content: "You write engaging cinematic stories."
+          },
+          {
             role: "user",
-            content: `Write a powerful cinematic story in ${language || "English"} based on this prompt:\n${prompt}`
+            content: `Write a captivating story in ${language || "English"} about: ${prompt}`
           }
         ]
       })
@@ -145,17 +151,18 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
 
     const data = await response.json();
 
-    console.log("TEXT RESPONSE:", JSON.stringify(data, null, 2));
+    console.log("OpenRouter response:", JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return res.status(500).json({
-        error: data
+        data: {
+          content: "Story service temporarily unavailable."
+        }
       });
     }
 
     const content =
       data?.choices?.[0]?.message?.content ||
-      data?.choices?.[0]?.text ||
       "Story generation unavailable.";
 
     if (req.user) {
@@ -173,7 +180,9 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
     console.error("Text error:", error.message);
 
     res.status(500).json({
-      error: "Text generation failed"
+      data: {
+        content: "Story generation failed."
+      }
     });
   }
 });
@@ -215,7 +224,7 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`,
         "Content-Type": "application/json",
         "X-Runway-Version": "2024-11-06"
       },
@@ -228,8 +237,6 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     });
 
     const data = await response.json();
-
-    console.log("VIDEO RESPONSE:", data);
 
     if (!response.ok) {
       return res.status(500).json({
@@ -248,8 +255,6 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Video error:", error.message);
-
     res.status(500).json({
       error: "Video generation failed"
     });
@@ -277,7 +282,7 @@ app.get("/admin", async (req, res) => {
       requests: totals[0]?.requests || 0
     });
 
-  } catch (error) {
+  } catch {
     res.status(500).json({
       users: 0,
       requests: 0
