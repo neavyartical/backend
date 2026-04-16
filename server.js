@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
 /* =========================
-   Firebase Admin Init
+   Firebase
 ========================= */
 try {
   if (!admin.apps.length) {
@@ -32,32 +32,20 @@ try {
     console.log("✅ Firebase initialized");
   }
 } catch (error) {
-  console.error("❌ Firebase init error:", error.message);
+  console.error("❌ Firebase error:", error.message);
 }
 
 /* =========================
    MongoDB
 ========================= */
-const mongoUri = process.env.MONGODB_URI;
-
-console.log("Mongo URI exists:", !!mongoUri);
-
-if (!mongoUri) {
-  console.error("❌ MONGODB_URI missing");
-} else {
-  mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 5000
-  })
-  .then(() => {
-    console.log("✅ MongoDB connected");
-  })
-  .catch(err => {
-    console.error("❌ MongoDB error:", err.message);
-  });
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.log("❌ Mongo error:", err.message));
 }
 
 /* =========================
-   User Schema
+   User Model
 ========================= */
 const userSchema = new mongoose.Schema({
   uid: String,
@@ -96,47 +84,25 @@ async function authMiddleware(req, res, next) {
     req.user = user;
     next();
 
-  } catch (error) {
-    console.error("Auth error:", error.message);
+  } catch {
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   Health Check
+   Root
 ========================= */
 app.get("/", (req, res) => {
-  res.json({
-    status: "ReelMind backend running"
-  });
+  res.json({ status: "ReelMind backend running" });
 });
 
 /* =========================
-   Current User
-========================= */
-app.get("/me", authMiddleware, async (req, res) => {
-  if (!req.user) {
-    return res.json({ credits: 0 });
-  }
-
-  res.json({
-    email: req.user.email,
-    credits: req.user.credits
-  });
-});
-
-/* =========================
-   Generate Text
+   Text
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   try {
     const { prompt, language } = req.body;
-
-    const finalPrompt = `
-Write a detailed cinematic story in ${language || "English"}.
-Prompt: ${prompt}
-`;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -146,53 +112,35 @@ Prompt: ${prompt}
       },
       body: JSON.stringify({
         model: "openai/gpt-4.1-mini",
-        messages: [
-          {
-            role: "user",
-            content: finalPrompt
-          }
-        ]
+        messages: [{
+          role: "user",
+          content: `Write a cinematic story in ${language || "English"}.\nPrompt:${prompt}`
+        }]
       })
     });
 
     const data = await response.json();
 
-    const content =
-      data?.choices?.[0]?.message?.content ||
-      "No story generated.";
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
-    }
-
     res.json({
       data: {
-        content
+        content: data?.choices?.[0]?.message?.content || "No response"
       }
     });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      error: "Text generation failed"
-    });
+  } catch {
+    res.status(500).json({ error: "Text generation failed" });
   }
 });
 
 /* =========================
-   Generate Image
+   Image
 ========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
-    }
+    const imageUrl =
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
 
     res.json({
       data: {
@@ -200,21 +148,19 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
       }
     });
 
-  } catch (error) {
-    res.status(500).json({
-      error: "Image generation failed"
-    });
+  } catch {
+    res.status(500).json({ error: "Image generation failed" });
   }
 });
 
 /* =========================
-   Generate Video
+   Video
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+    const createRes = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
@@ -225,24 +171,39 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
       })
     });
 
-    const data = await response.json();
+    const createData = await createRes.json();
 
-    console.log("Runway response:", data);
+    console.log("Create response:", JSON.stringify(createData, null, 2));
+
+    const taskId = createData?.id;
+
+    if (!taskId) {
+      return res.status(500).json({
+        error: createData
+      });
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 12000));
+
+    const statusRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`
+      }
+    });
+
+    const statusData = await statusRes.json();
+
+    console.log("Status response:", JSON.stringify(statusData, null, 2));
 
     const videoUrl =
-      data?.output?.video ||
-      data?.url ||
+      statusData?.output?.video ||
+      statusData?.output?.[0] ||
       null;
 
     if (!videoUrl) {
       return res.status(500).json({
-        error: "Video generation unavailable"
+        error: statusData
       });
-    }
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
     }
 
     res.json({
@@ -259,36 +220,15 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   Admin Stats
+   Admin
 ========================= */
 app.get("/admin", async (req, res) => {
-  try {
-    const users = await User.countDocuments();
-
-    const totals = await User.aggregate([
-      {
-        $group: {
-          _id: null,
-          requests: { $sum: "$requests" }
-        }
-      }
-    ]);
-
-    res.json({
-      users,
-      requests: totals[0]?.requests || 0
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      users: 0,
-      requests: 0
-    });
-  }
+  const users = await User.countDocuments();
+  res.json({ users });
 });
 
 /* =========================
-   Start Server
+   Start
 ========================= */
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
