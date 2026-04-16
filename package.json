@@ -1,22 +1,27 @@
 {
   "name": "reelmind-backend",
-  "version": "2.2.0",
-  "description": "ReelMind AI Backend - Production Ready",
+  "version": "2.3.0",
+  "description": "ReelMind AI Backend - Secure Production API",
   "main": "server.js",
   "type": "commonjs",
+
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
+
   "author": "Artical Neavy",
   "license": "MIT",
+
   "funding": {
     "type": "ko-fi",
     "url": "https://ko-fi.com/articalneavy"
   },
+
   "engines": {
     "node": ">=18"
   },
+
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -26,14 +31,19 @@
     "mongoose": "^8.3.2",
     "node-fetch": "^2.6.7"
   },
+
   "devDependencies": {
     "nodemon": "^3.1.0"
   },
+
   "keywords": [
     "ai",
     "backend",
     "openrouter",
     "reelmind",
-    "api"
+    "api",
+    "text-generation",
+    "image-generation",
+    "video-generation"
   ]
 }
