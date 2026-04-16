@@ -8,7 +8,11 @@ const admin = require("firebase-admin");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const HOST = "0.0.0.0";
 
+/* =========================
+   MIDDLEWARE
+========================= */
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -54,7 +58,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 /* =========================
-   CREDIT COSTS
+   COSTS
 ========================= */
 const COSTS = {
   text: 1,
@@ -111,7 +115,9 @@ async function authMiddleware(req, res, next) {
    HEALTH
 ========================= */
 app.get("/", (req, res) => {
-  res.json({ status: "ReelMind backend running" });
+  res.json({
+    status: "ReelMind backend running"
+  });
 });
 
 /* =========================
@@ -132,13 +138,15 @@ app.get("/me", authMiddleware, (req, res) => {
 });
 
 /* =========================
-   GENERATE TEXT
+   TEXT
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   try {
@@ -184,13 +192,15 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   GENERATE IMAGE
+   IMAGE
 ========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   const { prompt } = req.body;
@@ -203,13 +213,15 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   GENERATE VIDEO
+   VIDEO
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   try {
@@ -309,6 +321,6 @@ app.post("/kofi-webhook", async (req, res) => {
 /* =========================
    START
 ========================= */
-app.listen(PORT, () => {
-  console.log("Server running on", PORT);
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
 });
