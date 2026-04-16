@@ -2,34 +2,72 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
+const admin = require("firebase-admin");
+const mongoose = require("mongoose");
 
 const app = express();
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-let user = { credits: 10 };
-let stats = { users: 1, requests: 0 };
-
-// HEALTH
-app.get("/", (req,res)=>{
-  res.send("🚀 Backend LIVE");
+// ================= FIREBASE ADMIN =================
+admin.initializeApp({
+  credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT))
 });
 
-// USER
-app.get("/user",(req,res)=>{
+// ================= MONGODB =================
+mongoose.connect(process.env.MONGODB_URI);
+
+const userSchema = new mongoose.Schema({
+  uid: String,
+  email: String,
+  credits: { type: Number, default: 20 }
+});
+
+const User = mongoose.model("User", userSchema);
+
+// ================= AUTH =================
+async function auth(req, res, next){
+  try{
+    const bearer = req.headers.authorization;
+    if(!bearer) return next();
+
+    const token = bearer.split(" ")[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.user = decoded;
+    next();
+  }catch{
+    next();
+  }
+}
+
+app.use(auth);
+
+// ================= USER =================
+app.get("/me", async (req,res)=>{
+  if(!req.user){
+    return res.json({ guest:true, credits:"∞" });
+  }
+
+  let user = await User.findOne({ uid:req.user.uid });
+
+  if(!user){
+    user = await User.create({
+      uid:req.user.uid,
+      email:req.user.email,
+      credits:20
+    });
+  }
+
   res.json(user);
 });
 
-// TEXT
+// ================= TEXT =================
 app.post("/generate-text", async (req,res)=>{
-  const { prompt } = req.body;
-
-  user.credits--;
-  stats.requests++;
-
   try{
-    const r = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+    const { prompt, language } = req.body;
+
+    const reply = await fetch("https://openrouter.ai/api/v1/chat/completions",{
       method:"POST",
       headers:{
         "Authorization":`Bearer ${process.env.OPENROUTER_API_KEY}`,
@@ -37,38 +75,84 @@ app.post("/generate-text", async (req,res)=>{
       },
       body:JSON.stringify({
         model:"openai/gpt-4o-mini",
-        messages:[{role:"user",content:prompt}]
+        messages:[
+          {
+            role:"system",
+            content:`Respond fluently in ${language || "English"}.
+Generate detailed unlimited responses.
+Understand any world language including Krio, Temne, Limba and Mende.`
+          },
+          {
+            role:"user",
+            content:prompt
+          }
+        ]
       })
     });
 
-    const data = await r.json();
+    const data = await reply.json();
+
+    if(req.user){
+      await User.updateOne(
+        { uid:req.user.uid },
+        { $inc:{ credits:-1 } }
+      );
+    }
 
     res.json({
-      output: data.choices?.[0]?.message?.content || "Done",
-      credits: user.credits
+      data:{
+        content:data?.choices?.[0]?.message?.content || "No response"
+      }
     });
 
-  }catch(e){
-    res.json({ error:"AI failed" });
+  }catch(err){
+    res.status(500).json({ error:"TEXT_FAILED" });
   }
 });
 
-// IMAGE
-app.post("/generate-image",(req,res)=>{
+// ================= IMAGE =================
+app.post("/generate-image", async (req,res)=>{
   const { prompt } = req.body;
 
-  user.credits--;
-  stats.requests++;
-
   res.json({
-    output:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`,
-    credits:user.credits
+    data:{
+      url:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`
+    }
   });
 });
 
-// ADMIN
-app.get("/admin",(req,res)=>{
-  res.json(stats);
+// ================= VIDEO =================
+app.post("/generate-video", async (req,res)=>{
+  res.json({
+    preview:"https://www.w3schools.com/html/mov_bbb.mp4"
+  });
 });
 
-app.listen(3000,()=>console.log("🔥 Server running"));
+// ================= ADMIN =================
+app.get("/admin", async (req,res)=>{
+  const users = await User.countDocuments();
+  res.json({
+    users,
+    requests:"Live"
+  });
+});
+
+// ================= KO-FI =================
+app.post("/kofi-webhook", async (req,res)=>{
+  const { email } = req.body;
+
+  await User.updateOne(
+    { email },
+    { $inc:{ credits:50 } }
+  );
+
+  res.send("OK");
+});
+
+// ================= ROOT =================
+app.get("/", (req,res)=>{
+  res.send("ReelMind backend live");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, ()=> console.log("Server running on " + PORT));
