@@ -58,6 +58,22 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 /* =========================
+   HISTORY MODEL
+========================= */
+const historySchema = new mongoose.Schema({
+  uid:String,
+  mode:String,
+  prompt:String,
+  result:String,
+  createdAt:{
+    type:Date,
+    default:Date.now
+  }
+});
+
+const History = mongoose.models.History || mongoose.model("History", historySchema);
+
+/* =========================
    COSTS
 ========================= */
 const COSTS = {
@@ -151,6 +167,21 @@ app.get("/me",authMiddleware,(req,res)=>{
 });
 
 /* =========================
+   USER HISTORY
+========================= */
+app.get("/history",authMiddleware,async(req,res)=>{
+  if(!req.user){
+    return res.json([]);
+  }
+
+  const items = await History.find({ uid:req.user.uid })
+    .sort({ createdAt:-1 })
+    .limit(30);
+
+  res.json(items);
+});
+
+/* =========================
    TEXT
 ========================= */
 app.post("/generate-text",authMiddleware,async(req,res)=>{
@@ -189,10 +220,20 @@ app.post("/generate-text",authMiddleware,async(req,res)=>{
     });
 
     const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content || "No response";
+
+    if(req.user){
+      await History.create({
+        uid:req.user.uid,
+        mode:"text",
+        prompt,
+        result:content
+      });
+    }
 
     res.json({
       data:{
-        content:data?.choices?.[0]?.message?.content || "No response"
+        content
       }
     });
 
@@ -216,10 +257,20 @@ app.post("/generate-image",authMiddleware,async(req,res)=>{
   }
 
   const { prompt } = req.body;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+
+  if(req.user){
+    await History.create({
+      uid:req.user.uid,
+      mode:"image",
+      prompt,
+      result:imageUrl
+    });
+  }
 
   res.json({
     data:{
-      url:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+      url:imageUrl
     }
   });
 });
@@ -255,6 +306,15 @@ app.post("/generate-video",authMiddleware,async(req,res)=>{
     });
 
     const data = await response.json();
+
+    if(req.user){
+      await History.create({
+        uid:req.user.uid,
+        mode:"video",
+        prompt,
+        result:data?.output?.[0] || data?.id || ""
+      });
+    }
 
     res.json({
       taskId:data?.id || null,
