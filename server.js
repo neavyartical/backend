@@ -94,11 +94,11 @@ async function authMiddleware(req, res, next) {
    Root
 ========================= */
 app.get("/", (req, res) => {
-  res.json({ status: "ReelMind backend running" });
+  res.json({ status: "Backend LIVE" });
 });
 
 /* =========================
-   Text
+   Generate Text
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   try {
@@ -133,7 +133,7 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   Image
+   Generate Image
 ========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
   try {
@@ -154,26 +154,26 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   Video
+   Generate Video
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const createRes = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
+    const createRes = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        model: "gen3a_turbo",
         promptText: prompt
       })
     });
 
     const createData = await createRes.json();
-
-    console.log("Create response:", JSON.stringify(createData, null, 2));
+    console.log("Runway create:", JSON.stringify(createData, null, 2));
 
     const taskId = createData?.id;
 
@@ -183,7 +183,7 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
       });
     }
 
-    await new Promise(resolve => setTimeout(resolve, 12000));
+    await new Promise(resolve => setTimeout(resolve, 15000));
 
     const statusRes = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
       headers: {
@@ -192,8 +192,7 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     });
 
     const statusData = await statusRes.json();
-
-    console.log("Status response:", JSON.stringify(statusData, null, 2));
+    console.log("Runway status:", JSON.stringify(statusData, null, 2));
 
     const videoUrl =
       statusData?.output?.video ||
