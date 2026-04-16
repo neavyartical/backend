@@ -38,12 +38,22 @@ try {
 /* =========================
    MongoDB
 ========================= */
-if (!process.env.MONGODB_URI) {
-  console.error("❌ Missing MONGODB_URI");
+const mongoUri = process.env.MONGODB_URI;
+
+console.log("Mongo URI exists:", !!mongoUri);
+
+if (!mongoUri) {
+  console.error("❌ MONGODB_URI missing");
 } else {
-  mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log("✅ MongoDB connected"))
-    .catch(err => console.error("❌ MongoDB error:", err.message));
+  mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 5000
+  })
+  .then(() => {
+    console.log("✅ MongoDB connected");
+  })
+  .catch(err => {
+    console.error("❌ MongoDB error:", err.message);
+  });
 }
 
 /* =========================
@@ -64,8 +74,8 @@ const User = mongoose.models.User || mongoose.model("User", userSchema);
 ========================= */
 async function authMiddleware(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
+    const header = req.headers.authorization || "";
+    const token = header.replace("Bearer ", "");
 
     if (!token) {
       req.user = null;
@@ -85,6 +95,7 @@ async function authMiddleware(req, res, next) {
 
     req.user = user;
     next();
+
   } catch (error) {
     console.error("Auth error:", error.message);
     req.user = null;
@@ -111,20 +122,19 @@ app.get("/me", authMiddleware, async (req, res) => {
 
   res.json({
     email: req.user.email,
-    credits: req.user.credits,
-    requests: req.user.requests
+    credits: req.user.credits
   });
 });
 
 /* =========================
-   Generate Story
+   Generate Text
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   try {
     const { prompt, language } = req.body;
 
     const finalPrompt = `
-Create a cinematic, intelligent, highly detailed story in ${language || "English"}.
+Write a detailed cinematic story in ${language || "English"}.
 Prompt: ${prompt}
 `;
 
@@ -136,7 +146,12 @@ Prompt: ${prompt}
       },
       body: JSON.stringify({
         model: "openai/gpt-4.1-mini",
-        messages: [{ role: "user", content: finalPrompt }]
+        messages: [
+          {
+            role: "user",
+            content: finalPrompt
+          }
+        ]
       })
     });
 
@@ -152,7 +167,9 @@ Prompt: ${prompt}
     }
 
     res.json({
-      data: { content }
+      data: {
+        content
+      }
     });
 
   } catch (error) {
@@ -170,8 +187,7 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const imageUrl =
-      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
 
     if (req.user) {
       req.user.requests += 1;
@@ -179,7 +195,9 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
     }
 
     res.json({
-      data: { url: imageUrl }
+      data: {
+        url: imageUrl
+      }
     });
 
   } catch (error) {
@@ -190,66 +208,35 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   Generate Video (Runway)
+   Generate Video
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   try {
     const { prompt } = req.body;
 
-    const createTask = await fetch("https://api.runwayml.com/v1/text_to_video", {
+    const response = await fetch("https://api.dev.runwayml.com/v1/image_to_video", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-        "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "gen4.5",
-        promptText: prompt,
-        ratio: "1280:720",
-        duration: 5
+        promptText: prompt
       })
     });
 
-    const task = await createTask.json();
+    const data = await response.json();
 
-    if (!task.id) {
-      return res.status(500).json({
-        error: "Runway task creation failed",
-        details: task
-      });
-    }
+    console.log("Runway response:", data);
 
-    let videoUrl = null;
-
-    for (let i = 0; i < 24; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-
-      const statusRes = await fetch(
-        `https://api.runwayml.com/v1/tasks/${task.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-            "X-Runway-Version": "2024-11-06"
-          }
-        }
-      );
-
-      const statusData = await statusRes.json();
-
-      if (statusData.status === "SUCCEEDED") {
-        videoUrl = statusData.output?.[0];
-        break;
-      }
-
-      if (statusData.status === "FAILED") {
-        break;
-      }
-    }
+    const videoUrl =
+      data?.output?.video ||
+      data?.url ||
+      null;
 
     if (!videoUrl) {
       return res.status(500).json({
-        error: "Video generation failed"
+        error: "Video generation unavailable"
       });
     }
 
@@ -263,7 +250,7 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Runway error:", error.message);
+    console.error("Video error:", error.message);
 
     res.status(500).json({
       error: "Video generation failed"
