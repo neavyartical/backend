@@ -11,7 +11,11 @@ const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true }));
 
+/* =========================
+   FIREBASE
+========================= */
 try {
   if (!admin.apps.length) {
     admin.initializeApp({
@@ -28,12 +32,18 @@ try {
   console.log("Firebase skipped");
 }
 
+/* =========================
+   MONGODB
+========================= */
 if (process.env.MONGODB_URI) {
   mongoose.connect(process.env.MONGODB_URI)
     .then(() => console.log("Mongo connected"))
     .catch(err => console.log(err.message));
 }
 
+/* =========================
+   USER MODEL
+========================= */
 const userSchema = new mongoose.Schema({
   uid: String,
   email: String,
@@ -43,6 +53,9 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
+/* =========================
+   CREDIT COSTS
+========================= */
 const COSTS = {
   text: 1,
   image: 2,
@@ -51,14 +64,21 @@ const COSTS = {
 
 async function deductCredits(user, amount) {
   if (!user) return true;
-  if (user.credits < amount) return false;
+
+  if (user.credits < amount) {
+    return false;
+  }
 
   user.credits -= amount;
   user.requests += 1;
   await user.save();
+
   return true;
 }
 
+/* =========================
+   AUTH
+========================= */
 async function authMiddleware(req, res, next) {
   try {
     const token = (req.headers.authorization || "").replace("Bearer ", "");
@@ -87,10 +107,16 @@ async function authMiddleware(req, res, next) {
   }
 }
 
+/* =========================
+   HEALTH
+========================= */
 app.get("/", (req, res) => {
   res.json({ status: "ReelMind backend running" });
 });
 
+/* =========================
+   CURRENT USER
+========================= */
 app.get("/me", authMiddleware, (req, res) => {
   if (!req.user) {
     return res.json({
@@ -105,6 +131,9 @@ app.get("/me", authMiddleware, (req, res) => {
   });
 });
 
+/* =========================
+   GENERATE TEXT
+========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text);
 
@@ -147,11 +176,16 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
     });
   } catch {
     res.json({
-      data: { content: "Story generation failed" }
+      data: {
+        content: "Story generation failed"
+      }
     });
   }
 });
 
+/* =========================
+   GENERATE IMAGE
+========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image);
 
@@ -168,6 +202,9 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
   });
 });
 
+/* =========================
+   GENERATE VIDEO
+========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video);
 
@@ -206,6 +243,9 @@ app.post("/generate-video", authMiddleware, async (req, res) => {
   }
 });
 
+/* =========================
+   VIDEO STATUS
+========================= */
 app.get("/video-status/:taskId", async (req, res) => {
   try {
     const response = await fetch(
@@ -232,6 +272,43 @@ app.get("/video-status/:taskId", async (req, res) => {
   }
 });
 
+/* =========================
+   KO-FI WEBHOOK
+========================= */
+app.post("/kofi-webhook", async (req, res) => {
+  try {
+    const payload = JSON.parse(req.body.data || "{}");
+
+    const email = payload.email;
+    const amount = Number(payload.amount || 0);
+
+    if (!email) {
+      return res.status(400).send("Missing email");
+    }
+
+    let creditsToAdd = 0;
+
+    if (amount >= 5) creditsToAdd = 50;
+    if (amount >= 10) creditsToAdd = 120;
+    if (amount >= 20) creditsToAdd = 300;
+
+    const user = await User.findOne({ email });
+
+    if (user && creditsToAdd > 0) {
+      user.credits += creditsToAdd;
+      await user.save();
+    }
+
+    res.send("Credits updated");
+  } catch (error) {
+    console.error("Ko-fi webhook error:", error.message);
+    res.status(500).send("Webhook failed");
+  }
+});
+
+/* =========================
+   START
+========================= */
 app.listen(PORT, () => {
   console.log("Server running on", PORT);
 });
