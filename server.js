@@ -10,140 +10,115 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 /* =========================
-   Middleware
+   MIDDLEWARE
 ========================= */
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 
 /* =========================
-   Firebase Admin Init
+   FIREBASE
 ========================= */
-try {
-  if (!admin.apps.length) {
+try{
+  if(!admin.apps.length){
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY
-          ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+          ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g,"\n")
           : undefined
       })
     });
-    console.log("✅ Firebase initialized");
   }
-} catch (error) {
-  console.error("❌ Firebase init error:", error.message);
+}catch(err){
+  console.log("Firebase skipped");
 }
 
 /* =========================
-   MongoDB
+   MONGODB
 ========================= */
-const mongoUri = process.env.MONGODB_URI;
-
-if (!mongoUri) {
-  console.error("❌ MONGODB_URI missing");
-} else {
-  mongoose.connect(mongoUri, {
-    serverSelectionTimeoutMS: 5000
-  })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB error:", err.message));
+if(process.env.MONGODB_URI){
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(()=>console.log("Mongo connected"))
+    .catch(err=>console.log(err.message));
 }
 
 /* =========================
-   User Schema
+   USER MODEL
 ========================= */
 const userSchema = new mongoose.Schema({
-  uid: String,
-  email: String,
-  credits: { type: Number, default: 50 },
-  requests: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now }
+  uid:String,
+  email:String,
+  credits:{type:Number,default:50},
+  requests:{type:Number,default:0}
 });
 
-const User = mongoose.models.User || mongoose.model("User", userSchema);
+const User = mongoose.models.User || mongoose.model("User",userSchema);
 
 /* =========================
-   Auth Middleware
+   AUTH
 ========================= */
-async function authMiddleware(req, res, next) {
-  try {
-    const header = req.headers.authorization || "";
-    const token = header.replace("Bearer ", "");
+async function authMiddleware(req,res,next){
+  try{
+    const token = (req.headers.authorization || "").replace("Bearer ","");
 
-    if (!token) {
+    if(!token){
       req.user = null;
       return next();
     }
 
     const decoded = await admin.auth().verifyIdToken(token);
 
-    let user = await User.findOne({ uid: decoded.uid });
+    let user = await User.findOne({uid:decoded.uid});
 
-    if (!user) {
+    if(!user){
       user = await User.create({
-        uid: decoded.uid,
-        email: decoded.email
+        uid:decoded.uid,
+        email:decoded.email
       });
     }
 
     req.user = user;
     next();
-  } catch (error) {
-    console.error("Auth error:", error.message);
+
+  }catch{
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   Health Check
+   HEALTH
 ========================= */
-app.get("/", (req, res) => {
-  res.json({
-    status: "ReelMind backend running"
-  });
+app.get("/",(req,res)=>{
+  res.json({status:"ReelMind backend running"});
 });
 
 /* =========================
-   Current User
+   TEXT
 ========================= */
-app.get("/me", authMiddleware, async (req, res) => {
-  if (!req.user) {
-    return res.json({ credits: 0 });
-  }
+app.post("/generate-text",authMiddleware,async(req,res)=>{
+  try{
+    const {prompt,language} = req.body;
 
-  res.json({
-    email: req.user.email,
-    credits: req.user.credits
-  });
-});
-
-/* =========================
-   Generate Text
-========================= */
-app.post("/generate-text", authMiddleware, async (req, res) => {
-  try {
-    const { prompt, language } = req.body;
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://reelmindbackend-1.onrender.com",
-        "X-Title": "ReelMind AI"
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type":"application/json",
+        "HTTP-Referer":"https://reelmindbackend-1.onrender.com",
+        "X-Title":"ReelMind AI"
       },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages: [
+      body:JSON.stringify({
+        model:"openai/gpt-4o-mini",
+        messages:[
           {
-            role: "system",
-            content: "You write engaging cinematic stories."
+            role:"system",
+            content:"Write immersive cinematic stories."
           },
           {
-            role: "user",
-            content: `Write a captivating story in ${language || "English"} about: ${prompt}`
+            role:"user",
+            content:`Write in ${language || "English"} about: ${prompt}`
           }
         ]
       })
@@ -151,148 +126,101 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
 
     const data = await response.json();
 
-    console.log("OpenRouter response:", JSON.stringify(data, null, 2));
-
-    if (!response.ok) {
-      return res.status(500).json({
-        data: {
-          content: "Story service temporarily unavailable."
-        }
-      });
-    }
-
-    const content =
-      data?.choices?.[0]?.message?.content ||
-      "Story generation unavailable.";
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
-    }
-
     res.json({
-      data: {
-        content
+      data:{
+        content:data?.choices?.[0]?.message?.content || "No response"
       }
     });
 
-  } catch (error) {
-    console.error("Text error:", error.message);
-
-    res.status(500).json({
-      data: {
-        content: "Story generation failed."
-      }
+  }catch{
+    res.json({
+      data:{content:"Story generation failed"}
     });
   }
 });
 
 /* =========================
-   Generate Image
+   IMAGE
 ========================= */
-app.post("/generate-image", authMiddleware, async (req, res) => {
-  try {
-    const { prompt } = req.body;
+app.post("/generate-image",authMiddleware,async(req,res)=>{
+  const {prompt} = req.body;
 
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${Date.now()}`;
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
+  res.json({
+    data:{
+      url:`https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
     }
-
-    res.json({
-      data: {
-        url: imageUrl
-      }
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      error: "Image generation failed"
-    });
-  }
+  });
 });
 
 /* =========================
-   Generate Video
+   VIDEO START
 ========================= */
-app.post("/generate-video", authMiddleware, async (req, res) => {
-  try {
-    const { prompt } = req.body;
+app.post("/generate-video",authMiddleware,async(req,res)=>{
+  try{
+    const {prompt} = req.body;
 
-    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.RUNWAY_API_KEY}`,
-        "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"
+    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video",{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Content-Type":"application/json",
+        "X-Runway-Version":"2024-11-06"
       },
-      body: JSON.stringify({
-        model: "gen4.5",
-        promptText: prompt,
-        ratio: "1280:720",
-        duration: 5
+      body:JSON.stringify({
+        model:"gen4.5",
+        promptText:prompt,
+        ratio:"1280:720",
+        duration:5
       })
     });
 
     const data = await response.json();
 
-    if (!response.ok) {
-      return res.status(500).json({
-        error: data
-      });
-    }
-
-    if (req.user) {
-      req.user.requests += 1;
-      await req.user.save();
-    }
-
     res.json({
-      preview: data?.output?.[0] || null,
-      taskId: data?.id || null
+      taskId:data?.id || null,
+      preview:data?.output?.[0] || null
     });
 
-  } catch (error) {
-    res.status(500).json({
-      error: "Video generation failed"
+  }catch{
+    res.json({
+      error:"Video generation failed"
     });
   }
 });
 
 /* =========================
-   Admin Stats
+   VIDEO STATUS
 ========================= */
-app.get("/admin", async (req, res) => {
-  try {
-    const users = await User.countDocuments();
-
-    const totals = await User.aggregate([
+app.get("/video-status/:taskId",async(req,res)=>{
+  try{
+    const response = await fetch(
+      `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
       {
-        $group: {
-          _id: null,
-          requests: { $sum: "$requests" }
+        headers:{
+          "Authorization":`Bearer ${process.env.RUNWAY_API_KEY}`,
+          "X-Runway-Version":"2024-11-06"
         }
       }
-    ]);
+    );
+
+    const data = await response.json();
 
     res.json({
-      users,
-      requests: totals[0]?.requests || 0
+      video:data?.output?.[0] || null,
+      status:data?.status || "processing"
     });
 
-  } catch {
-    res.status(500).json({
-      users: 0,
-      requests: 0
+  }catch{
+    res.json({
+      video:null,
+      status:"failed"
     });
   }
 });
 
 /* =========================
-   Start Server
+   START
 ========================= */
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(PORT,()=>{
+  console.log("Server running on",PORT);
 });
