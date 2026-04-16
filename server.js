@@ -19,7 +19,7 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 /* =========================
-   SERVE FRONTEND (RENDER)
+   SERVE FRONTEND
 ========================= */
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -38,7 +38,7 @@ try {
       })
     });
   }
-} catch {
+} catch (error) {
   console.log("Firebase skipped");
 }
 
@@ -57,14 +57,20 @@ if (process.env.MONGODB_URI) {
 const userSchema = new mongoose.Schema({
   uid: String,
   email: String,
-  credits: { type: Number, default: 50 },
-  requests: { type: Number, default: 0 }
+  credits: {
+    type: Number,
+    default: 50
+  },
+  requests: {
+    type: Number,
+    default: 0
+  }
 });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 /* =========================
-   COSTS
+   CREDIT COSTS
 ========================= */
 const COSTS = {
   text: 1,
@@ -87,7 +93,7 @@ async function deductCredits(user, amount) {
 }
 
 /* =========================
-   AUTH
+   AUTH MIDDLEWARE
 ========================= */
 async function authMiddleware(req, res, next) {
   try {
@@ -111,18 +117,12 @@ async function authMiddleware(req, res, next) {
 
     req.user = user;
     next();
+
   } catch {
     req.user = null;
     next();
   }
 }
-
-/* =========================
-   ROOT
-========================= */
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
 
 /* =========================
    USER PROFILE
@@ -142,13 +142,15 @@ app.get("/me", authMiddleware, (req, res) => {
 });
 
 /* =========================
-   TEXT GENERATION
+   GENERATE TEXT
 ========================= */
 app.post("/generate-text", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   try {
@@ -195,13 +197,15 @@ app.post("/generate-text", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   IMAGE GENERATION
+   GENERATE IMAGE
 ========================= */
 app.post("/generate-image", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   const { prompt } = req.body;
@@ -214,13 +218,15 @@ app.post("/generate-image", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   VIDEO GENERATION
+   GENERATE VIDEO
 ========================= */
 app.post("/generate-video", authMiddleware, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video);
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   try {
@@ -286,7 +292,21 @@ app.get("/video-status/:taskId", async (req, res) => {
 });
 
 /* =========================
-   START
+   ROOT
+========================= */
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/* =========================
+   FRONTEND FALLBACK
+========================= */
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+/* =========================
+   START SERVER
 ========================= */
 app.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
