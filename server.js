@@ -5,22 +5,23 @@ const cors = require("cors");
 const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const admin = require("firebase-admin");
-const jwt = require("jsonwebtoken");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+const HOST = "0.0.0.0";
 
 /* =========================
    MIDDLEWARE
 ========================= */
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true }));
 
 /* =========================
-   FIREBASE
+   FIREBASE INIT
 ========================= */
-try {
-  if (!admin.apps.length) {
+if (!admin.apps.length) {
+  try {
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
@@ -28,20 +29,19 @@ try {
         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
       })
     });
-
     console.log("Firebase connected");
+  } catch {
+    console.log("Firebase skipped");
   }
-} catch (error) {
-  console.error("Firebase error:", error.message);
 }
 
 /* =========================
-   MONGODB
+   MONGO INIT
 ========================= */
 if (process.env.MONGODB_URI) {
   mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log("MongoDB connected"))
-    .catch(err => console.error("MongoDB error:", err.message));
+    .then(() => console.log("Mongo connected"))
+    .catch(err => console.log(err.message));
 }
 
 /* =========================
@@ -50,57 +50,51 @@ if (process.env.MONGODB_URI) {
 const userSchema = new mongoose.Schema({
   uid: String,
   email: String,
-  credits: {
-    type: Number,
-    default: 50
-  },
-  requests: {
-    type: Number,
-    default: 0
-  }
+  credits: { type: Number, default: 50 },
+  requests: { type: Number, default: 0 }
 });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
 /* =========================
-   JWT
+   COSTS
 ========================= */
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
+const COSTS = {
+  text: 1,
+  image: 2,
+  video: 5
+};
 
-function createJWT(user){
-  return jwt.sign(
-    {
-      uid: user.uid,
-      email: user.email
-    },
-    JWT_SECRET,
-    {
-      expiresIn: "30d"
-    }
-  );
+/* =========================
+   CREDIT
+========================= */
+async function deductCredits(user, amount) {
+  if (!user) return true;
+
+  if (user.credits < amount) {
+    return false;
+  }
+
+  user.credits -= amount;
+  user.requests += 1;
+  await user.save();
+
+  return true;
 }
 
 /* =========================
    AUTH
 ========================= */
-async function authMiddleware(req, res, next) {
+async function auth(req, res, next) {
   try {
-    const header = req.headers.authorization || "";
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
 
-    if (!header.startsWith("Bearer ")) {
+    if (!token) {
       req.user = null;
       return next();
     }
 
-    const token = header.replace("Bearer ", "");
-
-    let decoded = null;
-
-    try {
-      decoded = await admin.auth().verifyIdToken(token);
-    } catch {
-      decoded = jwt.verify(token, JWT_SECRET);
-    }
+    const decoded = await admin.auth().verifyIdToken(token);
 
     let user = await User.findOne({ uid: decoded.uid });
 
@@ -114,17 +108,25 @@ async function authMiddleware(req, res, next) {
     req.user = user;
     next();
 
-  } catch (error) {
-    console.error("Auth error:", error.message);
+  } catch {
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   USER PROFILE
+   ROOT
 ========================= */
-app.get("/me", authMiddleware, async (req, res) => {
+app.get("/", (req, res) => {
+  res.json({
+    status: "ReelMind backend running"
+  });
+});
+
+/* =========================
+   PROFILE
+========================= */
+app.get("/me", auth, (req, res) => {
   if (!req.user) {
     return res.json({
       email: "Guest",
@@ -139,103 +141,147 @@ app.get("/me", authMiddleware, async (req, res) => {
 });
 
 /* =========================
-   DEDUCT CREDITS
-========================= */
-async function deductCredits(user, amount){
-  if (!user) return true;
-
-  if (user.credits < amount) {
-    return false;
-  }
-
-  user.credits -= amount;
-  user.requests += 1;
-
-  await user.save();
-
-  return true;
-}
-
-/* =========================
    GENERATE TEXT
 ========================= */
-app.post("/generate-text", authMiddleware, async (req, res) => {
-  const allowed = await deductCredits(req.user, 1);
+app.post("/generate-text", auth, async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.text);
 
   if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
+    return res.status(403).json({ error: "Not enough credits" });
   }
 
-  const { prompt } = req.body;
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "Write cinematic immersive stories."
+          },
+          {
+            role: "user",
+            content: req.body.prompt
+          }
+        ]
+      }),
+      timeout: 15000
+    });
 
-  res.json({
-    data: {
-      content: `Generated story for: ${prompt}`
-    }
-  });
+    const data = await response.json();
+
+    res.json({
+      data: {
+        content: data?.choices?.[0]?.message?.content || "No response"
+      }
+    });
+
+  } catch {
+    res.json({
+      data: {
+        content: "Story generation failed"
+      }
+    });
+  }
 });
 
 /* =========================
    GENERATE IMAGE
 ========================= */
-app.post("/generate-image", authMiddleware, async (req, res) => {
-  const allowed = await deductCredits(req.user, 2);
+app.post("/generate-image", auth, async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.image);
 
   if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
+    return res.status(403).json({ error: "Not enough credits" });
   }
 
-  const { prompt } = req.body;
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(req.body.prompt)}`;
 
   res.json({
-    data: {
-      url: `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
-    }
+    data: { url }
   });
 });
 
 /* =========================
    GENERATE VIDEO
 ========================= */
-app.post("/generate-video", authMiddleware, async (req, res) => {
-  const allowed = await deductCredits(req.user, 5);
+app.post("/generate-video", auth, async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.video);
 
   if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
+    return res.status(403).json({ error: "Not enough credits" });
   }
 
-  res.json({
-    preview: "https://www.w3schools.com/html/mov_bbb.mp4"
-  });
+  try {
+    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
+      },
+      body: JSON.stringify({
+        model: "gen4.5",
+        promptText: req.body.prompt,
+        ratio: "1280:720",
+        duration: 5
+      }),
+      timeout: 20000
+    });
+
+    const data = await response.json();
+
+    res.json({
+      taskId: data?.id || null,
+      preview: data?.output?.[0] || null
+    });
+
+  } catch {
+    res.json({
+      error: "Video generation failed"
+    });
+  }
 });
 
 /* =========================
    VIDEO STATUS
 ========================= */
 app.get("/video-status/:taskId", async (req, res) => {
-  res.json({
-    video: "https://www.w3schools.com/html/mov_bbb.mp4"
-  });
-});
+  try {
+    const response = await fetch(
+      `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+          "X-Runway-Version": "2024-11-06"
+        },
+        timeout: 10000
+      }
+    );
 
-/* =========================
-   ROOT
-========================= */
-app.get("/", (req, res) => {
-  res.json({
-    status: "ReelMind backend running"
-  });
+    const data = await response.json();
+
+    res.json({
+      status: data?.status || "processing",
+      video: data?.output?.[0] || null
+    });
+
+  } catch {
+    res.json({
+      status: "failed",
+      video: null
+    });
+  }
 });
 
 /* =========================
    START
 ========================= */
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
 });
