@@ -34,7 +34,7 @@ if (!admin.apps.length) {
       })
     });
     console.log("Firebase connected");
-  } catch (error) {
+  } catch {
     console.log("Firebase skipped");
   }
 }
@@ -86,42 +86,60 @@ const COSTS = {
 function improvePrompt(prompt, mode) {
   let clean = String(prompt || "").trim();
 
+  clean = clean.replace(/reelmind/gi, "cinematic scene");
+
   if (mode === "image") {
-    return `
+    clean = `
 ${clean},
-ultra detailed,
-high quality,
-correct spelling,
-sharp typography,
-professional composition,
-realistic lighting,
-clean design,
-accurate text,
-precise prompt adherence,
-no distorted letters
-`.trim();
+ultra realistic,
+highly detailed,
+professional photography,
+cinematic lighting,
+natural skin texture,
+symmetrical face,
+sharp eyes,
+clean background,
+correct anatomy,
+realistic proportions,
+high resolution,
+8k quality,
+masterpiece,
+no distorted face,
+no duplicate face,
+no extra eyes,
+no extra fingers,
+no broken hands,
+no malformed body,
+no random letters,
+no text,
+no watermark,
+no logo,
+no blur
+`;
   }
 
   if (mode === "video") {
-    return `
+    clean = `
 ${clean},
 cinematic motion,
 smooth camera movement,
 realistic lighting,
 professional film quality,
-high detail
-`.trim();
+natural movement,
+high detail,
+no distortion
+`;
   }
 
   if (mode === "text") {
-    return `
+    clean = `
 ${clean}
 
-Write professionally with correct spelling and immersive detail.
-`.trim();
+Write professionally with correct grammar, natural wording, and immersive storytelling.
+`;
   }
 
-  return clean;
+  return clean.trim();
 }
 
 /* =========================
@@ -214,7 +232,7 @@ app.post("/generate-text", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const prompt = improvePrompt(req.body.prompt, "text");
+  const improvedPrompt = improvePrompt(req.body.prompt, "text");
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -232,7 +250,7 @@ app.post("/generate-text", auth, async (req, res) => {
           },
           {
             role: "user",
-            content: prompt
+            content: improvedPrompt
           }
         ]
       })
@@ -262,17 +280,38 @@ app.post("/generate-image", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  try {
-    const prompt = improvePrompt(req.body.prompt, "image");
+  const improvedPrompt = improvePrompt(req.body.prompt, "image");
 
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true`;
+
+  res.json({
+    data: { url }
+  });
+});
+
+/* =========================
+   EDIT IMAGE
+========================= */
+app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image uploaded" });
+    }
+
+    const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
+
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true`;
 
     res.json({
       data: { url }
     });
+
   } catch {
     res.status(500).json({
-      error: "Image generation failed"
+      error: "Image editing failed"
     });
   }
 });
@@ -284,7 +323,7 @@ app.post("/generate-video", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const prompt = improvePrompt(req.body.prompt, "video");
+  const improvedPrompt = improvePrompt(req.body.prompt, "video");
 
   try {
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
@@ -296,7 +335,7 @@ app.post("/generate-video", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "gen4.5",
-        promptText: prompt,
+        promptText: improvedPrompt,
         ratio: "1280:720",
         duration: 5
       })
