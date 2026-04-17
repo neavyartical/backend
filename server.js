@@ -81,6 +81,58 @@ const COSTS = {
 };
 
 /* =========================
+   PROMPT IMPROVER
+========================= */
+function improvePrompt(prompt, mode) {
+  let clean = String(prompt || "").trim();
+
+  clean = clean.replace(/reelmind/gi, "ReelMind AI");
+
+  if (mode === "image") {
+    clean = `
+${clean}
+
+Requirements:
+- exact readable text
+- brand name must appear exactly as "ReelMind AI"
+- no distorted letters
+- premium professional design
+- cinematic lighting
+- sharp details
+- realistic typography
+- clean composition
+- ultra high quality
+`;
+  }
+
+  if (mode === "video") {
+    clean = `
+${clean}
+
+Requirements:
+- cinematic motion
+- smooth camera movement
+- realistic lighting
+- professional film quality
+- ultra realistic details
+`;
+  }
+
+  if (mode === "text") {
+    clean = `
+${clean}
+
+Requirements:
+- professional writing
+- correct spelling
+- immersive storytelling
+`;
+  }
+
+  return clean.trim();
+}
+
+/* =========================
    HELPERS
 ========================= */
 async function logTransaction(email, type, amount, description) {
@@ -149,7 +201,7 @@ app.get("/", (req, res) => {
 app.get("/me", auth, (req, res) => {
   if (!req.user) {
     return res.json({
-      email: "Guest",
+      email: "",
       credits: 0,
       country: "Unknown",
       city: "Unknown"
@@ -171,6 +223,8 @@ app.post("/generate-text", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
+  const improvedPrompt = improvePrompt(req.body.prompt, "text");
+
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -187,7 +241,7 @@ app.post("/generate-text", auth, async (req, res) => {
           },
           {
             role: "user",
-            content: req.body.prompt
+            content: improvedPrompt
           }
         ]
       })
@@ -217,8 +271,8 @@ app.post("/generate-image", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const prompt = req.body.prompt;
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+  const improvedPrompt = improvePrompt(req.body.prompt, "image");
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}`;
 
   res.json({
     data: { url }
@@ -237,7 +291,7 @@ app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "No image uploaded" });
     }
 
-    const prompt = req.body.prompt || "Enhance image";
+    const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
     const formData = new FormData();
     formData.append(
@@ -245,7 +299,7 @@ app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
       new Blob([req.file.buffer], { type: req.file.mimetype }),
       req.file.originalname
     );
-    formData.append("prompt", prompt);
+    formData.append("prompt", improvedPrompt);
     formData.append("size", "512x512");
 
     const response = await fetch("https://api.openai.com/v1/images/edits", {
@@ -264,8 +318,7 @@ app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
       }
     });
 
-  } catch (error) {
-    console.log(error);
+  } catch {
     res.status(500).json({
       error: "Image editing failed"
     });
@@ -279,6 +332,8 @@ app.post("/generate-video", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
+  const improvedPrompt = improvePrompt(req.body.prompt, "video");
+
   try {
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
@@ -289,7 +344,7 @@ app.post("/generate-video", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "gen4.5",
-        promptText: req.body.prompt,
+        promptText: improvedPrompt,
         ratio: "1280:720",
         duration: 5
       })
