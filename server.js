@@ -30,11 +30,11 @@ if (!admin.apps.length) {
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+        privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n")
       })
     });
     console.log("Firebase connected");
-  } catch {
+  } catch (error) {
     console.log("Firebase skipped");
   }
 }
@@ -86,50 +86,42 @@ const COSTS = {
 function improvePrompt(prompt, mode) {
   let clean = String(prompt || "").trim();
 
-  clean = clean.replace(/reelmind/gi, "ReelMind AI");
-
   if (mode === "image") {
-    clean = `
-${clean}
-
-Requirements:
-- exact readable text
-- brand name must appear exactly as "ReelMind AI"
-- no distorted letters
-- premium professional design
-- cinematic lighting
-- sharp details
-- realistic typography
-- clean composition
-- ultra high quality
-`;
+    return `
+${clean},
+ultra detailed,
+high quality,
+correct spelling,
+sharp typography,
+professional composition,
+realistic lighting,
+clean design,
+accurate text,
+precise prompt adherence,
+no distorted letters
+`.trim();
   }
 
   if (mode === "video") {
-    clean = `
-${clean}
-
-Requirements:
-- cinematic motion
-- smooth camera movement
-- realistic lighting
-- professional film quality
-- ultra realistic details
-`;
+    return `
+${clean},
+cinematic motion,
+smooth camera movement,
+realistic lighting,
+professional film quality,
+high detail
+`.trim();
   }
 
   if (mode === "text") {
-    clean = `
+    return `
 ${clean}
 
-Requirements:
-- professional writing
-- correct spelling
-- immersive storytelling
-`;
+Write professionally with correct spelling and immersive detail.
+`.trim();
   }
 
-  return clean.trim();
+  return clean;
 }
 
 /* =========================
@@ -146,7 +138,6 @@ async function logTransaction(email, type, amount, description) {
 async function deductCredits(user, amount, mode) {
   if (!user) return true;
   if (user.email === ADMIN_EMAIL) return true;
-
   if (user.credits < amount) return false;
 
   user.credits -= amount;
@@ -223,7 +214,7 @@ app.post("/generate-text", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "text");
+  const prompt = improvePrompt(req.body.prompt, "text");
 
   try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -241,7 +232,7 @@ app.post("/generate-text", auth, async (req, res) => {
           },
           {
             role: "user",
-            content: improvedPrompt
+            content: prompt
           }
         ]
       })
@@ -271,56 +262,17 @@ app.post("/generate-image", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "image");
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}`;
-
-  res.json({
-    data: { url }
-  });
-});
-
-/* =========================
-   EDIT IMAGE
-========================= */
-app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
-
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" });
-    }
+    const prompt = improvePrompt(req.body.prompt, "image");
 
-    const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
-
-    const formData = new FormData();
-    formData.append(
-      "image",
-      new Blob([req.file.buffer], { type: req.file.mimetype }),
-      req.file.originalname
-    );
-    formData.append("prompt", improvedPrompt);
-    formData.append("size", "512x512");
-
-    const response = await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: formData
-    });
-
-    const data = await response.json();
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
 
     res.json({
-      data: {
-        url: data?.data?.[0]?.url || null
-      }
+      data: { url }
     });
-
   } catch {
     res.status(500).json({
-      error: "Image editing failed"
+      error: "Image generation failed"
     });
   }
 });
@@ -332,7 +284,7 @@ app.post("/generate-video", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "video");
+  const prompt = improvePrompt(req.body.prompt, "video");
 
   try {
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
@@ -344,7 +296,7 @@ app.post("/generate-video", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "gen4.5",
-        promptText: improvedPrompt,
+        promptText: prompt,
         ratio: "1280:720",
         duration: 5
       })
