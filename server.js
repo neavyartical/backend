@@ -5,10 +5,12 @@ const cors = require("cors");
 const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const admin = require("firebase-admin");
+const multer = require("multer");
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
+const upload = multer({ storage: multer.memoryStorage() });
 
 const ADMIN_EMAIL = "neavyartical@gmail.com";
 
@@ -63,10 +65,7 @@ const transactionSchema = new mongoose.Schema({
   type: String,
   amount: Number,
   description: String,
-  date: {
-    type: Date,
-    default: Date.now
-  }
+  date: { type: Date, default: Date.now }
 });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
@@ -82,57 +81,38 @@ const COSTS = {
 };
 
 /* =========================
-   LOG TRANSACTION
+   HELPERS
 ========================= */
-async function logTransaction(email, type, amount, description){
-  try{
-    await Transaction.create({
-      email,
-      type,
-      amount,
-      description
-    });
-  }catch(err){
+async function logTransaction(email, type, amount, description) {
+  try {
+    await Transaction.create({ email, type, amount, description });
+  } catch {
     console.log("Transaction log failed");
   }
 }
 
-/* =========================
-   DEDUCT CREDITS
-========================= */
-async function deductCredits(user, amount, mode){
-  if(!user) return true;
+async function deductCredits(user, amount, mode) {
+  if (!user) return true;
+  if (user.email === ADMIN_EMAIL) return true;
 
-  if(user.email === ADMIN_EMAIL){
-    return true;
-  }
-
-  if(user.credits < amount){
-    return false;
-  }
+  if (user.credits < amount) return false;
 
   user.credits -= amount;
   user.requests += 1;
   await user.save();
 
-  await logTransaction(
-    user.email,
-    "Generation",
-    -amount,
-    `${mode} generation`
-  );
-
+  await logTransaction(user.email, "Generation", -amount, `${mode} generation`);
   return true;
 }
 
 /* =========================
    AUTH
 ========================= */
-async function auth(req, res, next){
-  try{
+async function auth(req, res, next) {
+  try {
     const token = (req.headers.authorization || "").replace("Bearer ", "");
 
-    if(!token){
+    if (!token) {
       req.user = null;
       return next();
     }
@@ -141,7 +121,7 @@ async function auth(req, res, next){
 
     let user = await User.findOne({ uid: decoded.uid });
 
-    if(!user){
+    if (!user) {
       user = await User.create({
         uid: decoded.uid,
         email: decoded.email
@@ -150,40 +130,24 @@ async function auth(req, res, next){
 
     req.user = user;
     next();
-
-  }catch{
+  } catch {
     req.user = null;
     next();
   }
 }
 
 /* =========================
-   ADMIN ONLY
-========================= */
-function adminOnly(req, res, next){
-  if(!req.user || req.user.email !== ADMIN_EMAIL){
-    return res.status(403).json({
-      error: "Access denied"
-    });
-  }
-
-  next();
-}
-
-/* =========================
    ROOT
 ========================= */
-app.get("/", (req, res)=>{
-  res.json({
-    status: "ReelMind backend running"
-  });
+app.get("/", (req, res) => {
+  res.json({ status: "ReelMind backend running" });
 });
 
 /* =========================
    PROFILE
 ========================= */
-app.get("/me", auth, (req, res)=>{
-  if(!req.user){
+app.get("/me", auth, (req, res) => {
+  if (!req.user) {
     return res.json({
       email: "Guest",
       credits: 0,
@@ -201,167 +165,29 @@ app.get("/me", auth, (req, res)=>{
 });
 
 /* =========================
-   SAVE LOCATION
-========================= */
-app.post("/save-location", auth, async (req, res)=>{
-  try{
-    if(!req.user){
-      return res.status(401).json({
-        error: "Unauthorized"
-      });
-    }
-
-    req.user.country = req.body.country || "Unknown";
-    req.user.city = req.body.city || "Unknown";
-
-    await req.user.save();
-
-    res.json({
-      success: true
-    });
-
-  }catch{
-    res.status(500).json({
-      error: "Location save failed"
-    });
-  }
-});
-
-/* =========================
-   TRANSACTIONS
-========================= */
-app.get("/transactions", auth, async (req, res)=>{
-  if(!req.user){
-    return res.json([]);
-  }
-
-  try{
-    const data = await Transaction.find({
-      email: req.user.email
-    })
-    .sort({ date: -1 })
-    .limit(20);
-
-    res.json(data);
-
-  }catch{
-    res.status(500).json({
-      error: "Failed to load transactions"
-    });
-  }
-});
-
-/* =========================
-   ADMIN DASHBOARD
-========================= */
-app.get("/admin-dashboard", auth, adminOnly, async (req, res)=>{
-  try{
-    const totalUsers = await User.countDocuments();
-    const totalTransactions = await Transaction.countDocuments();
-    const totalGenerations = await Transaction.countDocuments({ type:"Generation" });
-
-    const usersByCountry = await User.aggregate([
-      {
-        $group:{
-          _id:"$country",
-          total:{ $sum:1 }
-        }
-      }
-    ]);
-
-    res.json({
-      totalUsers,
-      totalTransactions,
-      totalGenerations,
-      usersByCountry
-    });
-
-  }catch{
-    res.status(500).json({
-      error: "Dashboard failed"
-    });
-  }
-});
-
-/* =========================
-   PAYMENT WEBHOOK
-========================= */
-app.post("/payment-webhook", async (req, res)=>{
-  try{
-    const email = req.body.email;
-    const amount = Number(req.body.amount || 0);
-
-    if(!email){
-      return res.status(400).json({
-        error: "Missing email"
-      });
-    }
-
-    let creditsToAdd = 0;
-
-    if(amount >= 25){
-      creditsToAdd = 9999;
-    }else if(amount >= 12){
-      creditsToAdd = 150;
-    }else if(amount >= 5){
-      creditsToAdd = 50;
-    }
-
-    const user = await User.findOne({ email });
-
-    if(user){
-      user.credits += creditsToAdd;
-      await user.save();
-
-      await logTransaction(
-        email,
-        "Payment",
-        creditsToAdd,
-        "Credits purchased"
-      );
-    }
-
-    res.json({
-      success:true,
-      added:creditsToAdd
-    });
-
-  }catch{
-    res.status(500).json({
-      error:"Webhook failed"
-    });
-  }
-});
-
-/* =========================
    GENERATE TEXT
 ========================= */
-app.post("/generate-text", auth, async (req, res)=>{
+app.post("/generate-text", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
-  }
-
-  const language = req.body.language || "English";
-
-  try{
+  try {
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type":"application/json"
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json"
       },
-      body:JSON.stringify({
-        model:"openai/gpt-4o-mini",
-        messages:[
+      body: JSON.stringify({
+        model: "openai/gpt-4o-mini",
+        messages: [
           {
-            role:"system",
-            content:`Write cinematic immersive stories in ${language}.`
+            role: "system",
+            content: "Write cinematic immersive stories."
           },
           {
-            role:"user",
-            content:req.body.prompt
+            role: "user",
+            content: req.body.prompt
           }
         ]
       })
@@ -370,15 +196,15 @@ app.post("/generate-text", auth, async (req, res)=>{
     const data = await response.json();
 
     res.json({
-      data:{
-        content:data?.choices?.[0]?.message?.content || "No response"
+      data: {
+        content: data?.choices?.[0]?.message?.content || "No response"
       }
     });
 
-  }catch{
+  } catch {
     res.json({
-      data:{
-        content:"Story generation failed"
+      data: {
+        content: "Story generation failed"
       }
     });
   }
@@ -387,91 +213,98 @@ app.post("/generate-text", auth, async (req, res)=>{
 /* =========================
    GENERATE IMAGE
 ========================= */
-app.post("/generate-image", auth, async (req, res)=>{
+app.post("/generate-image", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
-  }
-
-  const language = req.body.language || "English";
-  const prompt = `${req.body.prompt} (${language})`;
-
+  const prompt = req.body.prompt;
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 
   res.json({
-    data:{ url }
+    data: { url }
   });
+});
+
+/* =========================
+   EDIT IMAGE
+========================= */
+app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No image uploaded" });
+    }
+
+    const prompt = req.body.prompt || "Enhance image";
+
+    const formData = new FormData();
+    formData.append(
+      "image",
+      new Blob([req.file.buffer], { type: req.file.mimetype }),
+      req.file.originalname
+    );
+    formData.append("prompt", prompt);
+    formData.append("size", "512x512");
+
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: formData
+    });
+
+    const data = await response.json();
+
+    res.json({
+      data: {
+        url: data?.data?.[0]?.url || null
+      }
+    });
+
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      error: "Image editing failed"
+    });
+  }
 });
 
 /* =========================
    GENERATE VIDEO
 ========================= */
-app.post("/generate-video", auth, async (req, res)=>{
+app.post("/generate-video", auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  if(!allowed){
-    return res.status(403).json({ error:"Not enough credits" });
-  }
-
-  const language = req.body.language || "English";
-
-  try{
+  try {
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
-      method:"POST",
-      headers:{
-        Authorization:`Bearer ${process.env.RUNWAY_API_KEY}`,
-        "Content-Type":"application/json",
-        "X-Runway-Version":"2024-11-06"
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+        "Content-Type": "application/json",
+        "X-Runway-Version": "2024-11-06"
       },
-      body:JSON.stringify({
-        model:"gen4.5",
-        promptText:`${req.body.prompt} (${language})`,
-        ratio:"1280:720",
-        duration:5
+      body: JSON.stringify({
+        model: "gen4.5",
+        promptText: req.body.prompt,
+        ratio: "1280:720",
+        duration: 5
       })
     });
 
     const data = await response.json();
 
     res.json({
-      taskId:data?.id || null,
-      preview:data?.output?.[0] || null
+      taskId: data?.id || null,
+      preview: data?.output?.[0] || null
     });
 
-  }catch{
+  } catch {
     res.json({
-      error:"Video generation failed"
-    });
-  }
-});
-
-/* =========================
-   VIDEO STATUS
-========================= */
-app.get("/video-status/:taskId", async (req, res)=>{
-  try{
-    const response = await fetch(
-      `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
-      {
-        headers:{
-          Authorization:`Bearer ${process.env.RUNWAY_API_KEY}`,
-          "X-Runway-Version":"2024-11-06"
-        }
-      }
-    );
-
-    const data = await response.json();
-
-    res.json({
-      status:data?.status || "processing",
-      video:data?.output?.[0] || null
-    });
-
-  }catch{
-    res.json({
-      status:"failed",
-      video:null
+      error: "Video generation failed"
     });
   }
 });
@@ -479,6 +312,6 @@ app.get("/video-status/:taskId", async (req, res)=>{
 /* =========================
    START
 ========================= */
-app.listen(PORT, HOST, ()=>{
+app.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
 });
