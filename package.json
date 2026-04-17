@@ -1,6 +1,6 @@
 {
   "name": "reelmind-backend",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "ReelMind AI Backend - Production Ready",
   "main": "server.js",
   "type": "commonjs",
@@ -35,6 +35,9 @@
     "backend",
     "runway",
     "reelmind",
-    "api"
+    "api",
+    "cinematic",
+    "image-generation",
+    "video-generation"
   ]
 }
