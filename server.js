@@ -26,17 +26,22 @@ app.use(express.urlencoded({ extended: true }));
    ANTI ABUSE
 ========================= */
 function antiAbuse(req, res, next) {
-  const ip = req.ip;
+  const key = req.headers.authorization || req.ip;
   const now = Date.now();
-  const last = requestLimiter.get(ip) || 0;
+  const previous = requestLimiter.get(key);
 
-  if (now - last < 3500) {
+  if (previous && now - previous < 3000) {
     return res.status(429).json({
-      error: "Please wait before sending another request."
+      error: "Please wait a few seconds before another request."
     });
   }
 
-  requestLimiter.set(ip, now);
+  requestLimiter.set(key, now);
+
+  setTimeout(() => {
+    requestLimiter.delete(key);
+  }, 60000);
+
   next();
 }
 
@@ -105,45 +110,71 @@ const COSTS = {
 function improvePrompt(prompt, mode) {
   let clean = String(prompt || "").trim();
 
-  clean = clean.replace(/reelmind/gi, "cinematic scene");
+  clean = clean.replace(/reelmind/gi, "cinematic professional artwork");
 
   if (mode === "image") {
-    clean += `
-, ultra realistic
-, masterpiece
-, highly detailed
-, cinematic lighting
-, professional photography
-, realistic skin texture
-, sharp eyes
-, natural face
-, symmetrical features
-, realistic hands
-, proper anatomy
-, 8k quality
-, no distortion
-, no extra fingers
-, no extra eyes
-, no duplicate face
-, no watermark
-, no random text
+    clean = `
+${clean},
+
+masterpiece,
+best quality,
+ultra realistic,
+photorealistic,
+highly detailed,
+sharp focus,
+cinematic lighting,
+studio lighting,
+natural skin texture,
+realistic eyes,
+symmetrical face,
+perfect anatomy,
+correct hands,
+correct fingers,
+depth of field,
+professional photography,
+award winning composition,
+
+negative prompt:
+blurry,
+low quality,
+bad anatomy,
+deformed face,
+extra limbs,
+extra fingers,
+crooked eyes,
+mutated hands,
+duplicate face,
+poor proportions,
+distorted body,
+random text,
+watermark,
+logo,
+grainy,
+oversaturated
 `;
   }
 
   if (mode === "video") {
-    clean += `
-, cinematic motion
-, smooth camera movement
-, realistic lighting
-, natural movement
-, professional film quality
-, high detail
+    clean = `
+${clean},
+
+cinematic motion,
+smooth camera movement,
+natural movement,
+professional lighting,
+realistic detail,
+film quality
 `;
   }
 
   if (mode === "text") {
-    clean += `
-Write professionally with correct grammar, natural wording and immersive storytelling.
+    clean = `
+${clean}
+
+Write professionally with:
+- correct grammar
+- natural wording
+- immersive storytelling
 `;
   }
 
@@ -202,13 +233,6 @@ async function auth(req, res, next) {
     next();
   }
 }
-
-/* =========================
-   ROOT
-========================= */
-app.get("/", (req, res) => {
-  res.json({ status: "ReelMind backend running" });
-});
 
 /* =========================
    PROFILE
@@ -270,7 +294,8 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const improvedPrompt = improvePrompt(req.body.prompt, "image");
 
   const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true&private=true`;
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
+    `?width=1024&height=1024&enhance=true&nologo=true&private=true`;
 
   res.json({
     data: { url }
@@ -284,84 +309,15 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  if (!req.file) {
-    return res.status(400).json({ error: "No image uploaded" });
-  }
-
   const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
   const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true&private=true`;
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
+    `?width=1024&height=1024&enhance=true&nologo=true&private=true`;
 
   res.json({
     data: { url }
   });
-});
-
-/* =========================
-   GENERATE VIDEO
-========================= */
-app.post("/generate-video", antiAbuse, auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.video, "Video");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
-
-  try {
-    const improvedPrompt = improvePrompt(req.body.prompt, "video");
-
-    const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-        "Content-Type": "application/json",
-        "X-Runway-Version": "2024-11-06"
-      },
-      body: JSON.stringify({
-        model: "gen4.5",
-        promptText: improvedPrompt,
-        ratio: "1280:720",
-        duration: 5
-      })
-    });
-
-    const data = await response.json();
-
-    res.json({
-      taskId: data?.id || null,
-      preview: data?.output?.[0] || null
-    });
-  } catch {
-    res.json({
-      error: "Video generation failed"
-    });
-  }
-});
-
-/* =========================
-   VIDEO STATUS
-========================= */
-app.get("/video-status/:taskId", async (req, res) => {
-  try {
-    const response = await fetch(
-      `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
-          "X-Runway-Version": "2024-11-06"
-        }
-      }
-    );
-
-    const data = await response.json();
-
-    res.json({
-      status: data?.status || "processing",
-      video: data?.output?.[0] || null
-    });
-  } catch {
-    res.json({
-      status: "failed"
-    });
-  }
 });
 
 /* =========================
