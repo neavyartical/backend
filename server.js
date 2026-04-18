@@ -10,7 +10,10 @@ const multer = require("multer");
 const app = express();
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
-const upload = multer({ storage: multer.memoryStorage() });
+
+const upload = multer({
+  storage: multer.memoryStorage()
+});
 
 const ADMIN_EMAIL = "neavyartical@gmail.com";
 const requestLimiter = new Map();
@@ -32,7 +35,7 @@ function antiAbuse(req, res, next) {
 
   if (previous && now - previous < 3000) {
     return res.status(429).json({
-      error: "Please wait a few seconds before another request."
+      error: "Please wait before sending another request."
     });
   }
 
@@ -57,8 +60,9 @@ if (!admin.apps.length) {
         privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n")
       })
     });
+
     console.log("Firebase connected");
-  } catch {
+  } catch (error) {
     console.log("Firebase skipped");
   }
 }
@@ -105,17 +109,24 @@ const COSTS = {
 };
 
 /* =========================
-   PROMPT IMPROVER
+   PROMPT ENHANCER
 ========================= */
 function improvePrompt(prompt, mode) {
-  let clean = String(prompt || "").trim();
+  const originalPrompt = String(prompt || "").trim();
 
-  clean = clean.replace(/reelmind/gi, "cinematic professional artwork");
+  if (!originalPrompt) return "";
 
   if (mode === "image") {
-    clean = `
-${clean},
+    return `
+${originalPrompt}
 
+IMPORTANT:
+Keep the user's exact subject.
+Do not change the main idea.
+Do not add unrelated objects.
+Make the scene visually premium.
+
+STYLE:
 masterpiece,
 best quality,
 ultra realistic,
@@ -123,62 +134,58 @@ photorealistic,
 highly detailed,
 sharp focus,
 cinematic lighting,
-studio lighting,
-natural skin texture,
-realistic eyes,
-symmetrical face,
-perfect anatomy,
-correct hands,
-correct fingers,
-depth of field,
 professional photography,
-award winning composition,
+natural skin texture,
+correct anatomy,
+realistic proportions,
+depth of field,
+high contrast,
+8k detail
 
-negative prompt:
+NEGATIVE:
 blurry,
-low quality,
-bad anatomy,
-deformed face,
-extra limbs,
+deformed,
 extra fingers,
-crooked eyes,
-mutated hands,
+extra limbs,
 duplicate face,
-poor proportions,
-distorted body,
-random text,
+bad anatomy,
+crooked eyes,
 watermark,
 logo,
-grainy,
-oversaturated
-`;
+random text,
+distorted body
+`.trim();
   }
 
   if (mode === "video") {
-    clean = `
-${clean},
+    return `
+${originalPrompt}
 
+Keep the user's scene exactly.
+
+STYLE:
 cinematic motion,
 smooth camera movement,
+realistic lighting,
 natural movement,
-professional lighting,
-realistic detail,
-film quality
-`;
+professional film quality,
+high detail
+`.trim();
   }
 
   if (mode === "text") {
-    clean = `
-${clean}
+    return `
+${originalPrompt}
 
-Write professionally with:
-- correct grammar
-- natural wording
-- immersive storytelling
-`;
+Write professionally using:
+correct grammar,
+natural wording,
+immersive storytelling,
+clear structure
+`.trim();
   }
 
-  return clean.trim();
+  return originalPrompt;
 }
 
 /* =========================
@@ -186,7 +193,12 @@ Write professionally with:
 ========================= */
 async function logTransaction(email, type, amount, description) {
   try {
-    await Transaction.create({ email, type, amount, description });
+    await Transaction.create({
+      email,
+      type,
+      amount,
+      description
+    });
   } catch {}
 }
 
@@ -197,9 +209,16 @@ async function deductCredits(user, amount, mode) {
 
   user.credits -= amount;
   user.requests += 1;
+
   await user.save();
 
-  await logTransaction(user.email, "Generation", -amount, `${mode} generation`);
+  await logTransaction(
+    user.email,
+    "Generation",
+    -amount,
+    `${mode} generation`
+  );
+
   return true;
 }
 
@@ -235,12 +254,24 @@ async function auth(req, res, next) {
 }
 
 /* =========================
+   ROOT
+========================= */
+app.get("/", (req, res) => {
+  res.json({
+    status: "ReelMind backend running"
+  });
+});
+
+/* =========================
    PROFILE
 ========================= */
 app.get("/me", auth, (req, res) => {
   res.json({
     email: req.user?.email || "",
-    credits: req.user?.email === ADMIN_EMAIL ? "∞" : (req.user?.credits || 0),
+    credits:
+      req.user?.email === ADMIN_EMAIL
+        ? "∞"
+        : req.user?.credits || 0,
     country: req.user?.country || "Unknown",
     city: req.user?.city || "Unknown"
   });
@@ -251,7 +282,12 @@ app.get("/me", auth, (req, res) => {
 ========================= */
 app.post("/generate-text", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
 
   try {
     const improvedPrompt = improvePrompt(req.body.prompt, "text");
@@ -264,7 +300,12 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [{ role: "user", content: improvedPrompt }]
+        messages: [
+          {
+            role: "user",
+            content: improvedPrompt
+          }
+        ]
       })
     });
 
@@ -289,16 +330,23 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
 
   const improvedPrompt = improvePrompt(req.body.prompt, "image");
 
-  const url =
+  const imageUrl =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
-    `?width=1024&height=1024&enhance=true&nologo=true&private=true`;
+    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
   res.json({
-    data: { url }
+    data: {
+      url: imageUrl
+    }
   });
 });
 
@@ -307,16 +355,26 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
 
-  const url =
+  const improvedPrompt = improvePrompt(
+    req.body.prompt || "Enhance this image",
+    "image"
+  );
+
+  const imageUrl =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
-    `?width=1024&height=1024&enhance=true&nologo=true&private=true`;
+    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
   res.json({
-    data: { url }
+    data: {
+      url: imageUrl
+    }
   });
 });
 
