@@ -13,6 +13,7 @@ const HOST = "0.0.0.0";
 const upload = multer({ storage: multer.memoryStorage() });
 
 const ADMIN_EMAIL = "neavyartical@gmail.com";
+const requestLimiter = new Map();
 
 /* =========================
    MIDDLEWARE
@@ -20,6 +21,24 @@ const ADMIN_EMAIL = "neavyartical@gmail.com";
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+/* =========================
+   ANTI ABUSE
+========================= */
+function antiAbuse(req, res, next) {
+  const ip = req.ip;
+  const now = Date.now();
+  const last = requestLimiter.get(ip) || 0;
+
+  if (now - last < 3500) {
+    return res.status(429).json({
+      error: "Please wait before sending another request."
+    });
+  }
+
+  requestLimiter.set(ip, now);
+  next();
+}
 
 /* =========================
    FIREBASE INIT
@@ -89,53 +108,42 @@ function improvePrompt(prompt, mode) {
   clean = clean.replace(/reelmind/gi, "cinematic scene");
 
   if (mode === "image") {
-    clean = `
-${clean},
-ultra realistic,
-highly detailed,
-professional photography,
-cinematic lighting,
-natural skin texture,
-symmetrical face,
-sharp eyes,
-clean background,
-correct anatomy,
-realistic proportions,
-high resolution,
-8k quality,
-masterpiece,
-no distorted face,
-no duplicate face,
-no extra eyes,
-no extra fingers,
-no broken hands,
-no malformed body,
-no random letters,
-no text,
-no watermark,
-no logo,
-no blur
+    clean += `
+, ultra realistic
+, masterpiece
+, highly detailed
+, cinematic lighting
+, professional photography
+, realistic skin texture
+, sharp eyes
+, natural face
+, symmetrical features
+, realistic hands
+, proper anatomy
+, 8k quality
+, no distortion
+, no extra fingers
+, no extra eyes
+, no duplicate face
+, no watermark
+, no random text
 `;
   }
 
   if (mode === "video") {
-    clean = `
-${clean},
-cinematic motion,
-smooth camera movement,
-realistic lighting,
-professional film quality,
-natural movement,
-high detail,
-no distortion
+    clean += `
+, cinematic motion
+, smooth camera movement
+, realistic lighting
+, natural movement
+, professional film quality
+, high detail
 `;
   }
 
   if (mode === "text") {
-    clean = `
-${clean}
-
-Write professionally with correct grammar, natural wording, and immersive storytelling.
+    clean += `
+Write professionally with correct grammar, natural wording and immersive storytelling.
 `;
   }
 
@@ -148,9 +156,7 @@ Write professionally with correct grammar, natural wording, and immersive storyt
 async function logTransaction(email, type, amount, description) {
   try {
     await Transaction.create({ email, type, amount, description });
-  } catch {
-    console.log("Transaction log failed");
-  }
+  } catch {}
 }
 
 async function deductCredits(user, amount, mode) {
@@ -208,33 +214,24 @@ app.get("/", (req, res) => {
    PROFILE
 ========================= */
 app.get("/me", auth, (req, res) => {
-  if (!req.user) {
-    return res.json({
-      email: "",
-      credits: 0,
-      country: "Unknown",
-      city: "Unknown"
-    });
-  }
-
   res.json({
-    email: req.user.email,
-    credits: req.user.email === ADMIN_EMAIL ? "∞" : req.user.credits,
-    country: req.user.country,
-    city: req.user.city
+    email: req.user?.email || "",
+    credits: req.user?.email === ADMIN_EMAIL ? "∞" : (req.user?.credits || 0),
+    country: req.user?.country || "Unknown",
+    city: req.user?.city || "Unknown"
   });
 });
 
 /* =========================
    GENERATE TEXT
 ========================= */
-app.post("/generate-text", auth, async (req, res) => {
+app.post("/generate-text", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "text");
-
   try {
+    const improvedPrompt = improvePrompt(req.body.prompt, "text");
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -243,16 +240,7 @@ app.post("/generate-text", auth, async (req, res) => {
       },
       body: JSON.stringify({
         model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "Write cinematic immersive stories."
-          },
-          {
-            role: "user",
-            content: improvedPrompt
-          }
-        ]
+        messages: [{ role: "user", content: improvedPrompt }]
       })
     });
 
@@ -263,7 +251,6 @@ app.post("/generate-text", auth, async (req, res) => {
         content: data?.choices?.[0]?.message?.content || "No response"
       }
     });
-
   } catch {
     res.json({
       data: {
@@ -276,13 +263,14 @@ app.post("/generate-text", auth, async (req, res) => {
 /* =========================
    GENERATE IMAGE
 ========================= */
-app.post("/generate-image", auth, async (req, res) => {
+app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   const improvedPrompt = improvePrompt(req.body.prompt, "image");
 
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true`;
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true&private=true`;
 
   res.json({
     data: { url }
@@ -292,40 +280,34 @@ app.post("/generate-image", auth, async (req, res) => {
 /* =========================
    EDIT IMAGE
 ========================= */
-app.post("/edit-image", auth, upload.single("image"), async (req, res) => {
+app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No image uploaded" });
-    }
-
-    const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
-
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true`;
-
-    res.json({
-      data: { url }
-    });
-
-  } catch {
-    res.status(500).json({
-      error: "Image editing failed"
-    });
+  if (!req.file) {
+    return res.status(400).json({ error: "No image uploaded" });
   }
+
+  const improvedPrompt = improvePrompt(req.body.prompt || "Enhance image", "image");
+
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}?width=1024&height=1024&nologo=true&private=true`;
+
+  res.json({
+    data: { url }
+  });
 });
 
 /* =========================
    GENERATE VIDEO
 ========================= */
-app.post("/generate-video", auth, async (req, res) => {
+app.post("/generate-video", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
   if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "video");
-
   try {
+    const improvedPrompt = improvePrompt(req.body.prompt, "video");
+
     const response = await fetch("https://api.dev.runwayml.com/v1/text_to_video", {
       method: "POST",
       headers: {
@@ -347,10 +329,37 @@ app.post("/generate-video", auth, async (req, res) => {
       taskId: data?.id || null,
       preview: data?.output?.[0] || null
     });
-
   } catch {
     res.json({
       error: "Video generation failed"
+    });
+  }
+});
+
+/* =========================
+   VIDEO STATUS
+========================= */
+app.get("/video-status/:taskId", async (req, res) => {
+  try {
+    const response = await fetch(
+      `https://api.dev.runwayml.com/v1/tasks/${req.params.taskId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.RUNWAY_API_KEY}`,
+          "X-Runway-Version": "2024-11-06"
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    res.json({
+      status: data?.status || "processing",
+      video: data?.output?.[0] || null
+    });
+  } catch {
+    res.json({
+      status: "failed"
     });
   }
 });
