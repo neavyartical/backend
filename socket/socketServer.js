@@ -1,23 +1,24 @@
 const { Server } = require("socket.io");
 
-let io;
-const onlineUsers = new Map();
-
-function initializeSocket(server) {
-  io = new Server(server, {
+function socketServer(server) {
+  const io = new Server(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
     }
   });
 
+  const onlineUsers = new Map();
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
     /* =========================
-       USER ONLINE
+       REGISTER USER
     ========================= */
-    socket.on("join", (userId) => {
+    socket.on("register", (userId) => {
+      if (!userId) return;
+
       onlineUsers.set(userId, socket.id);
 
       io.emit("online-users", Array.from(onlineUsers.keys()));
@@ -27,21 +28,38 @@ function initializeSocket(server) {
        SEND MESSAGE
     ========================= */
     socket.on("send-message", (data) => {
-      const receiverSocket = onlineUsers.get(data.receiverId);
+      const targetSocket = onlineUsers.get(data.receiverId);
 
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("new-message", data);
+      if (targetSocket) {
+        io.to(targetSocket).emit("receive-message", data);
       }
     });
 
     /* =========================
        START CALL
     ========================= */
-    socket.on("start-call", (data) => {
-      const receiverSocket = onlineUsers.get(data.receiverId);
+    socket.on("call-user", (data) => {
+      const targetSocket = onlineUsers.get(data.receiverId);
 
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("incoming-call", data);
+      if (targetSocket) {
+        io.to(targetSocket).emit("incoming-call", {
+          callerId: data.callerId,
+          callerName: data.callerName,
+          type: data.type
+        });
+      }
+    });
+
+    /* =========================
+       ANSWER CALL
+    ========================= */
+    socket.on("answer-call", (data) => {
+      const targetSocket = onlineUsers.get(data.callerId);
+
+      if (targetSocket) {
+        io.to(targetSocket).emit("call-answered", {
+          receiverId: data.receiverId
+        });
       }
     });
 
@@ -49,10 +67,12 @@ function initializeSocket(server) {
        END CALL
     ========================= */
     socket.on("end-call", (data) => {
-      const receiverSocket = onlineUsers.get(data.receiverId);
+      const targetSocket = onlineUsers.get(data.receiverId);
 
-      if (receiverSocket) {
-        io.to(receiverSocket).emit("call-ended", data);
+      if (targetSocket) {
+        io.to(targetSocket).emit("call-ended", {
+          userId: data.receiverId
+        });
       }
     });
 
@@ -68,18 +88,10 @@ function initializeSocket(server) {
       }
 
       io.emit("online-users", Array.from(onlineUsers.keys()));
+
       console.log("User disconnected:", socket.id);
     });
   });
-
-  return io;
 }
 
-function getIO() {
-  return io;
-}
-
-module.exports = {
-  initializeSocket,
-  getIO
-};
+module.exports = socketServer;
