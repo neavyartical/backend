@@ -1,18 +1,25 @@
-import Video from "../models/Video.js";
+const Video = require("../models/Video");
+const User = require("../models/User");
 
 /* =========================
    UPLOAD VIDEO
 ========================= */
-export const uploadVideo = async (req, res) => {
+const uploadVideo = async (req, res) => {
   try {
-    const { caption, videoUrl, thumbnail, duration } = req.body;
-
-    const video = await Video.create({
-      userId: req.user._id,
+    const {
+      userId,
       caption,
       videoUrl,
       thumbnail,
-      duration
+      location
+    } = req.body;
+
+    const video = await Video.create({
+      user: userId,
+      caption,
+      videoUrl,
+      thumbnail,
+      location
     });
 
     res.json({
@@ -27,28 +34,31 @@ export const uploadVideo = async (req, res) => {
 };
 
 /* =========================
-   GET FEED
+   GET VIDEOS
 ========================= */
-export const getFeed = async (req, res) => {
+const getVideos = async (req, res) => {
   try {
-    const videos = await Video.find({ visibility: "public" })
-      .populate("userId", "username avatar")
-      .sort({ createdAt: -1 })
-      .limit(30);
+    const videos = await Video.find()
+      .populate("user", "username avatar")
+      .sort({ createdAt: -1 });
 
-    res.json(videos);
+    res.json({
+      success: true,
+      videos
+    });
   } catch (error) {
     res.status(500).json({
-      error: "Could not load feed"
+      error: "Failed to load videos"
     });
   }
 };
 
 /* =========================
-   LIKE / UNLIKE VIDEO
+   LIKE VIDEO
 ========================= */
-export const toggleLike = async (req, res) => {
+const likeVideo = async (req, res) => {
   try {
+    const { userId } = req.body;
     const video = await Video.findById(req.params.id);
 
     if (!video) {
@@ -57,14 +67,12 @@ export const toggleLike = async (req, res) => {
       });
     }
 
-    const alreadyLiked = video.likes.includes(req.user._id);
+    const liked = video.likes.includes(userId);
 
-    if (alreadyLiked) {
-      video.likes = video.likes.filter(
-        id => id.toString() !== req.user._id.toString()
-      );
+    if (liked) {
+      video.likes.pull(userId);
     } else {
-      video.likes.push(req.user._id);
+      video.likes.push(userId);
     }
 
     await video.save();
@@ -80,29 +88,8 @@ export const toggleLike = async (req, res) => {
   }
 };
 
-/* =========================
-   ADD VIEW
-========================= */
-export const addView = async (req, res) => {
-  try {
-    const video = await Video.findById(req.params.id);
-
-    if (!video) {
-      return res.status(404).json({
-        error: "Video not found"
-      });
-    }
-
-    video.views += 1;
-    await video.save();
-
-    res.json({
-      success: true,
-      views: video.views
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: "View update failed"
-    });
-  }
+module.exports = {
+  uploadVideo,
+  getVideos,
+  likeVideo
 };
