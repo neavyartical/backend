@@ -1,14 +1,14 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const messageSchema = new mongoose.Schema(
   {
-    senderId: {
+    sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
     },
 
-    receiverId: {
+    receiver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
@@ -19,22 +19,7 @@ const messageSchema = new mongoose.Schema(
       default: ""
     },
 
-    voiceUrl: {
-      type: String,
-      default: ""
-    },
-
-    imageUrl: {
-      type: String,
-      default: ""
-    },
-
     seen: {
-      type: Boolean,
-      default: false
-    },
-
-    deleted: {
       type: Boolean,
       default: false
     }
@@ -44,4 +29,5 @@ const messageSchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.models.Message || mongoose.model("Message", messageSchema);
+module.exports =
+  mongoose.models.Message || mongoose.model("Message", messageSchema);
