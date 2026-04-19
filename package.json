@@ -1,7 +1,7 @@
 {
   "name": "reelmind-backend",
-  "version": "2.3.0",
-  "description": "ReelMind AI Backend - Production Ready",
+  "version": "3.0.0",
+  "description": "ReelMind AI Social Video Backend - Production Ready",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
@@ -25,7 +25,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.3.2",
     "multer": "^1.4.5-lts.1",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.7",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
@@ -33,10 +34,13 @@
   "keywords": [
     "ai",
     "backend",
-    "runway",
     "reelmind",
-    "api",
-    "cinematic",
+    "social-media",
+    "video-platform",
+    "live-chat",
+    "voice-call",
+    "video-call",
+    "socket",
     "image-generation",
     "video-generation"
   ]
