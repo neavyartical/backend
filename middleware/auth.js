@@ -1,24 +1,21 @@
-const auth = async (req, res, next) => {
-  try {
-    const bearer = req.headers.authorization;
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    userToken = await user.getIdToken();
 
-    if (!bearer || !bearer.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No token" });
+    if (el("userEmail")) {
+      el("userEmail").innerText = user.email;
     }
 
-    const token = bearer.split(" ")[1];
+    await loadProfile();
+  } else {
+    userToken = null;
 
-    const decoded = await admin.auth().verifyIdToken(token);
+    if (el("userEmail")) {
+      el("userEmail").innerText = "Guest Mode";
+    }
 
-    req.user = decoded;
-    next();
-
-  } catch (err) {
-    console.error("❌ TOKEN ERROR:", err.message);
-
-    return res.status(401).json({
-      error: "Invalid token",
-      details: err.message
-    });
+    if (el("credits")) {
+      el("credits").innerText = "0";
+    }
   }
-};
+});
