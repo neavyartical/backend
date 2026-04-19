@@ -1,20 +1,20 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const callSchema = new mongoose.Schema(
   {
-    callerId: {
+    caller: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
     },
 
-    receiverId: {
+    receiver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
     },
 
-    callType: {
+    type: {
       type: String,
       enum: ["audio", "video"],
       default: "audio"
@@ -22,13 +22,13 @@ const callSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["missed", "answered", "rejected"],
-      default: "missed"
+      enum: ["ongoing", "ended", "missed"],
+      default: "ongoing"
     },
 
-    duration: {
-      type: Number,
-      default: 0
+    endedAt: {
+      type: Date,
+      default: null
     }
   },
   {
@@ -36,4 +36,5 @@ const callSchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.models.Call || mongoose.model("Call", callSchema);
+module.exports =
+  mongoose.models.Call || mongoose.model("Call", callSchema);
