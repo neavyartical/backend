@@ -1,26 +1,14 @@
-import express from "express";
-import cors from "cors";
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-import videoRoutes from "./routes/video.js";
+const express = require("express");
+const router = express.Router();
 
-dotenv.config();
+const {
+  uploadVideo,
+  getVideos,
+  likeVideo
+} = require("../controllers/videoController");
 
-const app = express();
+router.post("/upload", uploadVideo);
+router.get("/", getVideos);
+router.post("/:id/like", likeVideo);
 
-app.use(cors());
-app.use(express.json());
-
-/* =========================
-   API ROUTES
-========================= */
-app.use("/videos", videoRoutes);
-
-/* =========================
-   START SERVER
-========================= */
-const PORT = process.env.PORT || 10000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+module.exports = router;
