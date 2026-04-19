@@ -7,6 +7,13 @@ const mongoose = require("mongoose");
 const admin = require("firebase-admin");
 const multer = require("multer");
 
+/* =========================
+   SOCIAL ROUTES
+========================= */
+const videoRoutes = require("./routes/video");
+const messageRoutes = require("./routes/message");
+const callRoutes = require("./routes/call");
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
@@ -24,6 +31,13 @@ const requestLimiter = new Map();
 app.use(cors());
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+/* =========================
+   API ROUTES
+========================= */
+app.use("/videos", videoRoutes);
+app.use("/messages", messageRoutes);
+app.use("/calls", callRoutes);
 
 /* =========================
    ANTI ABUSE
@@ -121,10 +135,9 @@ function improvePrompt(prompt, mode) {
 ${originalPrompt}
 
 IMPORTANT:
-Keep the user's exact subject.
-Do not change the main idea.
+Keep the exact user subject.
+Do not change the original idea.
 Do not add unrelated objects.
-Make the scene visually premium.
 
 STYLE:
 masterpiece,
@@ -161,14 +174,14 @@ distorted body
     return `
 ${originalPrompt}
 
-Keep the user's scene exactly.
+Keep the exact original scene.
 
 STYLE:
 cinematic motion,
 smooth camera movement,
-realistic lighting,
 natural movement,
-professional film quality,
+professional lighting,
+film quality,
 high detail
 `.trim();
   }
@@ -212,12 +225,7 @@ async function deductCredits(user, amount, mode) {
 
   await user.save();
 
-  await logTransaction(
-    user.email,
-    "Generation",
-    -amount,
-    `${mode} generation`
-  );
+  await logTransaction(user.email, "Generation", -amount, `${mode} generation`);
 
   return true;
 }
@@ -268,61 +276,10 @@ app.get("/", (req, res) => {
 app.get("/me", auth, (req, res) => {
   res.json({
     email: req.user?.email || "",
-    credits:
-      req.user?.email === ADMIN_EMAIL
-        ? "∞"
-        : req.user?.credits || 0,
+    credits: req.user?.email === ADMIN_EMAIL ? "∞" : req.user?.credits || 0,
     country: req.user?.country || "Unknown",
     city: req.user?.city || "Unknown"
   });
-});
-
-/* =========================
-   GENERATE TEXT
-========================= */
-app.post("/generate-text", antiAbuse, auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.text, "Text");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  try {
-    const improvedPrompt = improvePrompt(req.body.prompt, "text");
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "user",
-            content: improvedPrompt
-          }
-        ]
-      })
-    });
-
-    const data = await response.json();
-
-    res.json({
-      data: {
-        content: data?.choices?.[0]?.message?.content || "No response"
-      }
-    });
-  } catch {
-    res.json({
-      data: {
-        content: "Story generation failed"
-      }
-    });
-  }
 });
 
 /* =========================
@@ -330,42 +287,9 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   const improvedPrompt = improvePrompt(req.body.prompt, "image");
-
-  const imageUrl =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
-    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
-
-  res.json({
-    data: {
-      url: imageUrl
-    }
-  });
-});
-
-/* =========================
-   EDIT IMAGE
-========================= */
-app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  const improvedPrompt = improvePrompt(
-    req.body.prompt || "Enhance this image",
-    "image"
-  );
 
   const imageUrl =
     `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
