@@ -1,17 +1,17 @@
-import Call from "../models/Call.js";
+const Call = require("../models/Call");
 
 /* =========================
    START CALL
 ========================= */
-export const startCall = async (req, res) => {
+const startCall = async (req, res) => {
   try {
-    const { receiverId, callType } = req.body;
+    const { caller, receiver, type } = req.body;
 
     const call = await Call.create({
-      callerId: req.user._id,
-      receiverId,
-      callType: callType || "audio",
-      status: "missed"
+      caller,
+      receiver,
+      type,
+      status: "ongoing"
     });
 
     res.json({
@@ -20,7 +20,7 @@ export const startCall = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      error: "Call start failed"
+      error: "Failed to start call"
     });
   }
 };
@@ -28,22 +28,18 @@ export const startCall = async (req, res) => {
 /* =========================
    END CALL
 ========================= */
-export const endCall = async (req, res) => {
+const endCall = async (req, res) => {
   try {
-    const { callId, duration, status } = req.body;
+    const { callId } = req.body;
 
-    const call = await Call.findById(callId);
-
-    if (!call) {
-      return res.status(404).json({
-        error: "Call not found"
-      });
-    }
-
-    call.duration = duration || 0;
-    call.status = status || "answered";
-
-    await call.save();
+    const call = await Call.findByIdAndUpdate(
+      callId,
+      {
+        status: "ended",
+        endedAt: new Date()
+      },
+      { new: true }
+    );
 
     res.json({
       success: true,
@@ -51,30 +47,38 @@ export const endCall = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      error: "Call update failed"
+      error: "Failed to end call"
     });
   }
 };
 
 /* =========================
-   GET CALL HISTORY
+   CALL HISTORY
 ========================= */
-export const getCallHistory = async (req, res) => {
+const getCallHistory = async (req, res) => {
   try {
+    const { userId } = req.params;
+
     const calls = await Call.find({
       $or: [
-        { callerId: req.user._id },
-        { receiverId: req.user._id }
+        { caller: userId },
+        { receiver: userId }
       ]
-    })
-      .populate("callerId", "username avatar")
-      .populate("receiverId", "username avatar")
-      .sort({ createdAt: -1 });
+    }).sort({ createdAt: -1 });
 
-    res.json(calls);
+    res.json({
+      success: true,
+      calls
+    });
   } catch (error) {
     res.status(500).json({
-      error: "Could not load calls"
+      error: "Failed to load calls"
     });
   }
+};
+
+module.exports = {
+  startCall,
+  endCall,
+  getCallHistory
 };
