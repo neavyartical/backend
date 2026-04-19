@@ -1,8 +1,8 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 
 const videoSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
@@ -23,6 +23,11 @@ const videoSchema = new mongoose.Schema(
       default: ""
     },
 
+    location: {
+      type: String,
+      default: ""
+    },
+
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -30,7 +35,21 @@ const videoSchema = new mongoose.Schema(
       }
     ],
 
-    commentsCount: {
+    comments: [
+      {
+        user: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User"
+        },
+        text: String,
+        createdAt: {
+          type: Date,
+          default: Date.now
+        }
+      }
+    ],
+
+    views: {
       type: Number,
       default: 0
     },
@@ -38,21 +57,6 @@ const videoSchema = new mongoose.Schema(
     shares: {
       type: Number,
       default: 0
-    },
-
-    views: {
-      type: Number,
-      default: 0
-    },
-
-    duration: {
-      type: Number,
-      default: 0
-    },
-
-    visibility: {
-      type: String,
-      default: "public"
     }
   },
   {
@@ -60,4 +64,5 @@ const videoSchema = new mongoose.Schema(
   }
 );
 
-export default mongoose.models.Video || mongoose.model("Video", videoSchema);
+module.exports =
+  mongoose.models.Video || mongoose.model("Video", videoSchema);
