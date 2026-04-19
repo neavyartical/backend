@@ -6,6 +6,7 @@ const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const admin = require("firebase-admin");
 const multer = require("multer");
+const http = require("http");
 
 /* =========================
    SOCIAL ROUTES
@@ -13,8 +14,11 @@ const multer = require("multer");
 const videoRoutes = require("./routes/video");
 const messageRoutes = require("./routes/message");
 const callRoutes = require("./routes/call");
+const socketServer = require("./socket/socketServer");
 
 const app = express();
+const server = http.createServer(app);
+
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
 
@@ -76,7 +80,7 @@ if (!admin.apps.length) {
     });
 
     console.log("Firebase connected");
-  } catch (error) {
+  } catch {
     console.log("Firebase skipped");
   }
 }
@@ -110,8 +114,12 @@ const transactionSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now }
 });
 
-const User = mongoose.models.User || mongoose.model("User", userSchema);
-const Transaction = mongoose.models.Transaction || mongoose.model("Transaction", transactionSchema);
+const User =
+  mongoose.models.User || mongoose.model("User", userSchema);
+
+const Transaction =
+  mongoose.models.Transaction ||
+  mongoose.model("Transaction", transactionSchema);
 
 /* =========================
    COSTS
@@ -135,9 +143,11 @@ function improvePrompt(prompt, mode) {
 ${originalPrompt}
 
 IMPORTANT:
-Keep the exact user subject.
-Do not change the original idea.
+Keep the user's exact subject.
+Keep the original scene.
+Do not change the request.
 Do not add unrelated objects.
+Follow the prompt closely.
 
 STYLE:
 masterpiece,
@@ -174,7 +184,8 @@ distorted body
     return `
 ${originalPrompt}
 
-Keep the exact original scene.
+IMPORTANT:
+Keep the user's exact scene.
 
 STYLE:
 cinematic motion,
@@ -225,7 +236,12 @@ async function deductCredits(user, amount, mode) {
 
   await user.save();
 
-  await logTransaction(user.email, "Generation", -amount, `${mode} generation`);
+  await logTransaction(
+    user.email,
+    "Generation",
+    -amount,
+    `${mode} generation`
+  );
 
   return true;
 }
@@ -276,7 +292,10 @@ app.get("/", (req, res) => {
 app.get("/me", auth, (req, res) => {
   res.json({
     email: req.user?.email || "",
-    credits: req.user?.email === ADMIN_EMAIL ? "∞" : req.user?.credits || 0,
+    credits:
+      req.user?.email === ADMIN_EMAIL
+        ? "∞"
+        : req.user?.credits || 0,
     country: req.user?.country || "Unknown",
     city: req.user?.city || "Unknown"
   });
@@ -287,7 +306,12 @@ app.get("/me", auth, (req, res) => {
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
 
   const improvedPrompt = improvePrompt(req.body.prompt, "image");
 
@@ -303,8 +327,38 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
 });
 
 /* =========================
-   START
+   EDIT IMAGE
 ========================= */
-app.listen(PORT, HOST, () => {
+app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
+
+  if (!allowed) {
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
+  }
+
+  const improvedPrompt = improvePrompt(
+    req.body.prompt || "Enhance this image",
+    "image"
+  );
+
+  const imageUrl =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
+    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
+
+  res.json({
+    data: {
+      url: imageUrl
+    }
+  });
+});
+
+/* =========================
+   START SERVER
+========================= */
+socketServer(server);
+
+server.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
 });
