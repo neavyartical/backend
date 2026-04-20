@@ -14,20 +14,29 @@ const uploadVideo = async (req, res) => {
       location
     } = req.body;
 
+    if (!userId || !videoUrl) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields"
+      });
+    }
+
     const video = await Video.create({
       user: userId,
-      caption,
+      caption: caption || "",
       videoUrl,
-      thumbnail,
-      location
+      thumbnail: thumbnail || "",
+      location: location || ""
     });
 
     res.json({
       success: true,
+      message: "Video uploaded successfully",
       video
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Video upload failed"
     });
   }
@@ -44,32 +53,36 @@ const getVideos = async (req, res) => {
 
     res.json({
       success: true,
+      count: videos.length,
       videos
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to load videos"
     });
   }
 };
 
 /* =========================
-   LIKE VIDEO
+   LIKE / UNLIKE VIDEO
 ========================= */
 const likeVideo = async (req, res) => {
   try {
     const { userId } = req.body;
+
     const video = await Video.findById(req.params.id);
 
     if (!video) {
       return res.status(404).json({
+        success: false,
         error: "Video not found"
       });
     }
 
-    const liked = video.likes.includes(userId);
+    const alreadyLiked = video.likes.includes(userId);
 
-    if (liked) {
+    if (alreadyLiked) {
       video.likes.pull(userId);
     } else {
       video.likes.push(userId);
@@ -79,10 +92,12 @@ const likeVideo = async (req, res) => {
 
     res.json({
       success: true,
+      liked: !alreadyLiked,
       likes: video.likes.length
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Like failed"
     });
   }
