@@ -2,20 +2,21 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const fetch = require("node-fetch");
 const mongoose = require("mongoose");
 const admin = require("firebase-admin");
 const multer = require("multer");
 const http = require("http");
 
 /* =========================
-   SOCIAL ROUTES
+   ROUTES
 ========================= */
 const videoRoutes = require("./routes/video");
 const messageRoutes = require("./routes/message");
-const callRoutes = require("./routes/call");
 const socketServer = require("./socket/socketServer");
 
+/* =========================
+   APP SETUP
+========================= */
 const app = express();
 const server = http.createServer(app);
 
@@ -37,37 +38,16 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 /* =========================
-   API ROUTES
+   DATABASE
 ========================= */
-app.use("/videos", videoRoutes);
-app.use("/messages", messageRoutes);
-app.use("/calls", callRoutes);
-
-/* =========================
-   ANTI ABUSE
-========================= */
-function antiAbuse(req, res, next) {
-  const key = req.headers.authorization || req.ip;
-  const now = Date.now();
-  const previous = requestLimiter.get(key);
-
-  if (previous && now - previous < 3000) {
-    return res.status(429).json({
-      error: "Please wait before sending another request."
-    });
-  }
-
-  requestLimiter.set(key, now);
-
-  setTimeout(() => {
-    requestLimiter.delete(key);
-  }, 60000);
-
-  next();
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log("Mongo connected"))
+    .catch(err => console.log("Mongo error:", err.message));
 }
 
 /* =========================
-   FIREBASE INIT
+   FIREBASE
 ========================= */
 if (!admin.apps.length) {
   try {
@@ -83,15 +63,6 @@ if (!admin.apps.length) {
   } catch {
     console.log("Firebase skipped");
   }
-}
-
-/* =========================
-   MONGO INIT
-========================= */
-if (process.env.MONGODB_URI) {
-  mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log("Mongo connected"))
-    .catch(err => console.log(err.message));
 }
 
 /* =========================
@@ -114,15 +85,11 @@ const transactionSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now }
 });
 
-const User =
-  mongoose.models.User || mongoose.model("User", userSchema);
-
-const Transaction =
-  mongoose.models.Transaction ||
-  mongoose.model("Transaction", transactionSchema);
+const User = mongoose.models.User || mongoose.model("User", userSchema);
+const Transaction = mongoose.models.Transaction || mongoose.model("Transaction", transactionSchema);
 
 /* =========================
-   COSTS
+   CREDIT COSTS
 ========================= */
 const COSTS = {
   text: 1,
@@ -131,90 +98,82 @@ const COSTS = {
 };
 
 /* =========================
-   PROMPT ENHANCER
+   ROUTE MIDDLEWARE
 ========================= */
-function improvePrompt(prompt, mode) {
-  const originalPrompt = String(prompt || "").trim();
+function antiAbuse(req, res, next) {
+  const key = req.headers.authorization || req.ip;
+  const now = Date.now();
+  const previous = requestLimiter.get(key);
 
-  if (!originalPrompt) return "";
-
-  if (mode === "image") {
-    return `
-${originalPrompt}
-
-IMPORTANT:
-Keep the user's exact subject.
-Keep the original scene.
-Do not change the request.
-Do not add unrelated objects.
-Follow the prompt closely.
-
-STYLE:
-masterpiece,
-best quality,
-ultra realistic,
-photorealistic,
-highly detailed,
-sharp focus,
-cinematic lighting,
-professional photography,
-natural skin texture,
-correct anatomy,
-realistic proportions,
-depth of field,
-high contrast,
-8k detail
-
-NEGATIVE:
-blurry,
-deformed,
-extra fingers,
-extra limbs,
-duplicate face,
-bad anatomy,
-crooked eyes,
-watermark,
-logo,
-random text,
-distorted body
-`.trim();
+  if (previous && now - previous < 3000) {
+    return res.status(429).json({
+      error: "Please wait before sending another request."
+    });
   }
 
-  if (mode === "video") {
-    return `
-${originalPrompt}
+  requestLimiter.set(key, now);
 
-IMPORTANT:
-Keep the user's exact scene.
+  setTimeout(() => {
+    requestLimiter.delete(key);
+  }, 60000);
 
-STYLE:
-cinematic motion,
-smooth camera movement,
-natural movement,
-professional lighting,
-film quality,
-high detail
-`.trim();
+  next();
+}
+
+async function auth(req, res, next) {
+  try {
+    const token = (req.headers.authorization || "").replace("Bearer ", "");
+
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+
+    let user = await User.findOne({ uid: decoded.uid });
+
+    if (!user) {
+      user = await User.create({
+        uid: decoded.uid,
+        email: decoded.email
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch {
+    req.user = null;
+    next();
   }
-
-  if (mode === "text") {
-    return `
-${originalPrompt}
-
-Write professionally using:
-correct grammar,
-natural wording,
-immersive storytelling,
-clear structure
-`.trim();
-  }
-
-  return originalPrompt;
 }
 
 /* =========================
    HELPERS
 ========================= */
+function improvePrompt(prompt, mode) {
+  const clean = String(prompt || "").trim();
+
+  if (!clean) return "";
+
+  if (mode === "image") {
+    return `${clean}
+masterpiece, ultra realistic, cinematic lighting, highly detailed`;
+  }
+
+  if (mode === "video") {
+    return `${clean}
+cinematic motion, smooth movement, professional film quality`;
+  }
+
+  if (mode === "text") {
+    return `${clean}
+Write professionally with immersive storytelling`;
+  }
+
+  return clean;
+}
+
 async function logTransaction(email, type, amount, description) {
   try {
     await Transaction.create({
@@ -247,35 +206,10 @@ async function deductCredits(user, amount, mode) {
 }
 
 /* =========================
-   AUTH
+   API ROUTES
 ========================= */
-async function auth(req, res, next) {
-  try {
-    const token = (req.headers.authorization || "").replace("Bearer ", "");
-
-    if (!token) {
-      req.user = null;
-      return next();
-    }
-
-    const decoded = await admin.auth().verifyIdToken(token);
-
-    let user = await User.findOne({ uid: decoded.uid });
-
-    if (!user) {
-      user = await User.create({
-        uid: decoded.uid,
-        email: decoded.email
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch {
-    req.user = null;
-    next();
-  }
-}
+app.use("/videos", videoRoutes);
+app.use("/messages", messageRoutes);
 
 /* =========================
    ROOT
@@ -296,8 +230,27 @@ app.get("/me", auth, (req, res) => {
       req.user?.email === ADMIN_EMAIL
         ? "∞"
         : req.user?.credits || 0,
-    country: req.user?.country || "Unknown",
-    city: req.user?.city || "Unknown"
+    city: req.user?.city || "Unknown",
+    country: req.user?.country || "Unknown"
+  });
+});
+
+/* =========================
+   GENERATE TEXT
+========================= */
+app.post("/generate-text", antiAbuse, auth, async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.text, "Text");
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
+
+  const text = improvePrompt(req.body.prompt, "text");
+
+  res.json({
+    data: {
+      content: text
+    }
   });
 });
 
@@ -308,21 +261,17 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
 
   if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
+    return res.status(403).json({ error: "Not enough credits" });
   }
 
-  const improvedPrompt = improvePrompt(req.body.prompt, "image");
+  const prompt = improvePrompt(req.body.prompt, "image");
 
-  const imageUrl =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
   res.json({
-    data: {
-      url: imageUrl
-    }
+    data: { url }
   });
 });
 
@@ -333,32 +282,43 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
 
   if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
+    return res.status(403).json({ error: "Not enough credits" });
   }
 
-  const improvedPrompt = improvePrompt(
-    req.body.prompt || "Enhance this image",
-    "image"
-  );
+  const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
-  const imageUrl =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(improvedPrompt)}` +
+  const url =
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
   res.json({
-    data: {
-      url: imageUrl
-    }
+    data: { url }
   });
 });
 
 /* =========================
-   START SERVER
+   GENERATE VIDEO
+========================= */
+app.post("/generate-video", antiAbuse, auth, async (req, res) => {
+  const allowed = await deductCredits(req.user, COSTS.video, "Video");
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
+
+  res.json({
+    preview: "https://www.w3schools.com/html/mov_bbb.mp4"
+  });
+});
+
+/* =========================
+   SOCKET START
 ========================= */
 socketServer(server);
 
+/* =========================
+   SERVER START
+========================= */
 server.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
 });
