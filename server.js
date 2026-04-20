@@ -12,6 +12,7 @@ const http = require("http");
 ========================= */
 const videoRoutes = require("./routes/video");
 const messageRoutes = require("./routes/message");
+const callRoutes = require("./routes/call");
 const socketServer = require("./socket/socketServer");
 
 /* =========================
@@ -98,7 +99,7 @@ const COSTS = {
 };
 
 /* =========================
-   ROUTE MIDDLEWARE
+   SECURITY
 ========================= */
 function antiAbuse(req, res, next) {
   const key = req.headers.authorization || req.ip;
@@ -120,6 +121,9 @@ function antiAbuse(req, res, next) {
   next();
 }
 
+/* =========================
+   AUTH
+========================= */
 async function auth(req, res, next) {
   try {
     const token = (req.headers.authorization || "").replace("Bearer ", "");
@@ -210,6 +214,7 @@ async function deductCredits(user, amount, mode) {
 ========================= */
 app.use("/videos", videoRoutes);
 app.use("/messages", messageRoutes);
+app.use("/calls", callRoutes);
 
 /* =========================
    ROOT
@@ -226,10 +231,7 @@ app.get("/", (req, res) => {
 app.get("/me", auth, (req, res) => {
   res.json({
     email: req.user?.email || "",
-    credits:
-      req.user?.email === ADMIN_EMAIL
-        ? "∞"
-        : req.user?.credits || 0,
+    credits: req.user?.email === ADMIN_EMAIL ? "∞" : req.user?.credits || 0,
     city: req.user?.city || "Unknown",
     country: req.user?.country || "Unknown"
   });
@@ -240,16 +242,11 @@ app.get("/me", auth, (req, res) => {
 ========================= */
 app.post("/generate-text", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
-
-  if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
-  }
-
-  const text = improvePrompt(req.body.prompt, "text");
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   res.json({
     data: {
-      content: text
+      content: improvePrompt(req.body.prompt, "text")
     }
   });
 });
@@ -259,10 +256,7 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
-
-  if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
-  }
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   const prompt = improvePrompt(req.body.prompt, "image");
 
@@ -270,9 +264,7 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-  res.json({
-    data: { url }
-  });
+  res.json({ data: { url } });
 });
 
 /* =========================
@@ -280,10 +272,7 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-
-  if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
-  }
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
@@ -291,9 +280,7 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-  res.json({
-    data: { url }
-  });
+  res.json({ data: { url } });
 });
 
 /* =========================
@@ -301,10 +288,7 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
 ========================= */
 app.post("/generate-video", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
-
-  if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
-  }
+  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
 
   res.json({
     preview: "https://www.w3schools.com/html/mov_bbb.mp4"
