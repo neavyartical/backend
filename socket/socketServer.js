@@ -10,6 +10,10 @@ function socketServer(server) {
 
   const onlineUsers = new Map();
 
+  function broadcastOnlineUsers() {
+    io.emit("online-users", Array.from(onlineUsers.keys()));
+  }
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
@@ -17,21 +21,54 @@ function socketServer(server) {
        REGISTER USER
     ========================= */
     socket.on("register", (userId) => {
-      if (!userId) return;
+      try {
+        if (!userId) return;
 
-      onlineUsers.set(userId, socket.id);
+        onlineUsers.set(userId, socket.id);
+        broadcastOnlineUsers();
 
-      io.emit("online-users", Array.from(onlineUsers.keys()));
+        console.log("Registered:", userId);
+      } catch (error) {
+        console.log("Register error:", error.message);
+      }
     });
 
     /* =========================
        SEND MESSAGE
     ========================= */
     socket.on("send-message", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
+      try {
+        if (!data?.receiverId) return;
 
-      if (targetSocket) {
-        io.to(targetSocket).emit("receive-message", data);
+        const targetSocket = onlineUsers.get(data.receiverId);
+
+        if (targetSocket) {
+          io.to(targetSocket).emit("receive-message", {
+            senderId: data.senderId,
+            receiverId: data.receiverId,
+            text: data.text,
+            createdAt: new Date()
+          });
+        }
+      } catch (error) {
+        console.log("Message error:", error.message);
+      }
+    });
+
+    /* =========================
+       TYPING INDICATOR
+    ========================= */
+    socket.on("typing", (data) => {
+      try {
+        const targetSocket = onlineUsers.get(data.receiverId);
+
+        if (targetSocket) {
+          io.to(targetSocket).emit("user-typing", {
+            senderId: data.senderId
+          });
+        }
+      } catch (error) {
+        console.log("Typing error:", error.message);
       }
     });
 
@@ -39,14 +76,20 @@ function socketServer(server) {
        START CALL
     ========================= */
     socket.on("call-user", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
+      try {
+        if (!data?.receiverId) return;
 
-      if (targetSocket) {
-        io.to(targetSocket).emit("incoming-call", {
-          callerId: data.callerId,
-          callerName: data.callerName,
-          type: data.type
-        });
+        const targetSocket = onlineUsers.get(data.receiverId);
+
+        if (targetSocket) {
+          io.to(targetSocket).emit("incoming-call", {
+            callerId: data.callerId,
+            callerName: data.callerName || "Unknown",
+            type: data.type || "audio"
+          });
+        }
+      } catch (error) {
+        console.log("Call error:", error.message);
       }
     });
 
@@ -54,12 +97,33 @@ function socketServer(server) {
        ANSWER CALL
     ========================= */
     socket.on("answer-call", (data) => {
-      const targetSocket = onlineUsers.get(data.callerId);
+      try {
+        const targetSocket = onlineUsers.get(data.callerId);
 
-      if (targetSocket) {
-        io.to(targetSocket).emit("call-answered", {
-          receiverId: data.receiverId
-        });
+        if (targetSocket) {
+          io.to(targetSocket).emit("call-answered", {
+            receiverId: data.receiverId
+          });
+        }
+      } catch (error) {
+        console.log("Answer error:", error.message);
+      }
+    });
+
+    /* =========================
+       REJECT CALL
+    ========================= */
+    socket.on("reject-call", (data) => {
+      try {
+        const targetSocket = onlineUsers.get(data.callerId);
+
+        if (targetSocket) {
+          io.to(targetSocket).emit("call-rejected", {
+            receiverId: data.receiverId
+          });
+        }
+      } catch (error) {
+        console.log("Reject error:", error.message);
       }
     });
 
@@ -67,12 +131,16 @@ function socketServer(server) {
        END CALL
     ========================= */
     socket.on("end-call", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
+      try {
+        const targetSocket = onlineUsers.get(data.receiverId);
 
-      if (targetSocket) {
-        io.to(targetSocket).emit("call-ended", {
-          userId: data.receiverId
-        });
+        if (targetSocket) {
+          io.to(targetSocket).emit("call-ended", {
+            userId: data.receiverId
+          });
+        }
+      } catch (error) {
+        console.log("End call error:", error.message);
       }
     });
 
@@ -80,16 +148,20 @@ function socketServer(server) {
        DISCONNECT
     ========================= */
     socket.on("disconnect", () => {
-      for (const [userId, socketId] of onlineUsers.entries()) {
-        if (socketId === socket.id) {
-          onlineUsers.delete(userId);
-          break;
+      try {
+        for (const [userId, socketId] of onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            onlineUsers.delete(userId);
+            break;
+          }
         }
+
+        broadcastOnlineUsers();
+
+        console.log("User disconnected:", socket.id);
+      } catch (error) {
+        console.log("Disconnect error:", error.message);
       }
-
-      io.emit("online-users", Array.from(onlineUsers.keys()));
-
-      console.log("User disconnected:", socket.id);
     });
   });
 }
