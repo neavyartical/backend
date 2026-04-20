@@ -7,6 +7,13 @@ const sendMessage = async (req, res) => {
   try {
     const { sender, receiver, text } = req.body;
 
+    if (!sender || !receiver || !text) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required fields"
+      });
+    }
+
     const message = await Message.create({
       sender,
       receiver,
@@ -15,17 +22,19 @@ const sendMessage = async (req, res) => {
 
     res.json({
       success: true,
-      message
+      message: "Message sent successfully",
+      data: message
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to send message"
     });
   }
 };
 
 /* =========================
-   GET MESSAGES
+   GET CONVERSATION
 ========================= */
 const getMessages = async (req, res) => {
   try {
@@ -40,10 +49,12 @@ const getMessages = async (req, res) => {
 
     res.json({
       success: true,
+      count: messages.length,
       messages
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to load messages"
     });
   }
