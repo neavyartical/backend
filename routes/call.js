@@ -1,4 +1,3 @@
-
 const express = require("express");
 const router = express.Router();
 
@@ -8,6 +7,9 @@ const {
   getCallHistory
 } = require("../controllers/callController");
 
+/* =========================
+   CALL ROUTES
+========================= */
 router.post("/start", startCall);
 router.post("/end", endCall);
 router.get("/:userId", getCallHistory);
