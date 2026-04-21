@@ -1,4 +1,3 @@
-
 const { Server } = require("socket.io");
 
 function socketServer(server) {
@@ -11,9 +10,10 @@ function socketServer(server) {
 
   const onlineUsers = new Map();
 
-  /* =========================
-     SOCKET CONNECTION
-  ========================= */
+  function emitOnlineUsers() {
+    io.emit("online-users", Array.from(onlineUsers.keys()));
+  }
+
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
@@ -25,28 +25,34 @@ function socketServer(server) {
 
       onlineUsers.set(userId, socket.id);
 
-      io.emit("online-users", Array.from(onlineUsers.keys()));
+      socket.userId = userId;
 
-      console.log(`User registered: ${userId}`);
+      emitOnlineUsers();
+
+      console.log(`Registered ${userId}`);
     });
 
     /* =========================
-       SEND LIVE MESSAGE
+       PRIVATE MESSAGE
     ========================= */
     socket.on("send-message", (data) => {
       const {
-        sender,
+        senderId,
         receiverId,
-        text
-      } = data;
+        text,
+        createdAt
+      } = data || {};
+
+      if (!receiverId || !text) return;
 
       const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
         io.to(targetSocket).emit("receive-message", {
-          sender,
+          senderId,
+          receiverId,
           text,
-          createdAt: new Date()
+          createdAt: createdAt || new Date()
         });
       }
     });
@@ -57,10 +63,10 @@ function socketServer(server) {
     socket.on("call-user", (data) => {
       const {
         callerId,
-        callerName,
         receiverId,
+        callerName,
         type
-      } = data;
+      } = data || {};
 
       const targetSocket = onlineUsers.get(receiverId);
 
@@ -68,7 +74,7 @@ function socketServer(server) {
         io.to(targetSocket).emit("incoming-call", {
           callerId,
           callerName,
-          type
+          type: type || "audio"
         });
       }
     });
@@ -80,7 +86,7 @@ function socketServer(server) {
       const {
         callerId,
         receiverId
-      } = data;
+      } = data || {};
 
       const targetSocket = onlineUsers.get(callerId);
 
@@ -98,7 +104,7 @@ function socketServer(server) {
       const {
         callerId,
         receiverId
-      } = data;
+      } = data || {};
 
       const targetSocket = onlineUsers.get(callerId);
 
@@ -114,10 +120,13 @@ function socketServer(server) {
     ========================= */
     socket.on("end-call", (data) => {
       const {
-        receiverId
-      } = data;
+        receiverId,
+        callerId
+      } = data || {};
 
-      const targetSocket = onlineUsers.get(receiverId);
+      const targetSocket =
+        onlineUsers.get(receiverId) ||
+        onlineUsers.get(callerId);
 
       if (targetSocket) {
         io.to(targetSocket).emit("call-ended");
@@ -125,26 +134,23 @@ function socketServer(server) {
     });
 
     /* =========================
-       TYPING INDICATOR
+       TYPING STATUS
     ========================= */
     socket.on("typing", (data) => {
       const targetSocket = onlineUsers.get(data.receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("typing", {
+        io.to(targetSocket).emit("user-typing", {
           senderId: data.senderId
         });
       }
     });
 
-    /* =========================
-       STOP TYPING
-    ========================= */
     socket.on("stop-typing", (data) => {
       const targetSocket = onlineUsers.get(data.receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("stop-typing", {
+        io.to(targetSocket).emit("user-stop-typing", {
           senderId: data.senderId
         });
       }
@@ -154,14 +160,18 @@ function socketServer(server) {
        DISCONNECT
     ========================= */
     socket.on("disconnect", () => {
-      for (const [userId, socketId] of onlineUsers.entries()) {
-        if (socketId === socket.id) {
-          onlineUsers.delete(userId);
-          break;
+      if (socket.userId) {
+        onlineUsers.delete(socket.userId);
+      } else {
+        for (const [userId, socketId] of onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            onlineUsers.delete(userId);
+            break;
+          }
         }
       }
 
-      io.emit("online-users", Array.from(onlineUsers.keys()));
+      emitOnlineUsers();
 
       console.log("User disconnected:", socket.id);
     });
