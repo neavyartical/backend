@@ -10,6 +10,9 @@ function socketServer(server) {
 
   const onlineUsers = new Map();
 
+  /* =========================
+     EMIT ONLINE USERS
+  ========================= */
   function emitOnlineUsers() {
     io.emit("online-users", Array.from(onlineUsers.keys()));
   }
@@ -24,16 +27,15 @@ function socketServer(server) {
       if (!userId) return;
 
       onlineUsers.set(userId, socket.id);
-
       socket.userId = userId;
 
       emitOnlineUsers();
 
-      console.log(`Registered ${userId}`);
+      console.log("Registered:", userId);
     });
 
     /* =========================
-       PRIVATE MESSAGE
+       SEND PRIVATE MESSAGE
     ========================= */
     socket.on("send-message", (data) => {
       const {
@@ -58,6 +60,29 @@ function socketServer(server) {
     });
 
     /* =========================
+       TYPING STATUS
+    ========================= */
+    socket.on("typing", ({ senderId, receiverId }) => {
+      const targetSocket = onlineUsers.get(receiverId);
+
+      if (targetSocket) {
+        io.to(targetSocket).emit("user-typing", {
+          senderId
+        });
+      }
+    });
+
+    socket.on("stop-typing", ({ senderId, receiverId }) => {
+      const targetSocket = onlineUsers.get(receiverId);
+
+      if (targetSocket) {
+        io.to(targetSocket).emit("user-stop-typing", {
+          senderId
+        });
+      }
+    });
+
+    /* =========================
        START CALL
     ========================= */
     socket.on("call-user", (data) => {
@@ -65,6 +90,7 @@ function socketServer(server) {
         callerId,
         receiverId,
         callerName,
+        offer,
         type
       } = data || {};
 
@@ -74,6 +100,7 @@ function socketServer(server) {
         io.to(targetSocket).emit("incoming-call", {
           callerId,
           callerName,
+          offer,
           type: type || "audio"
         });
       }
@@ -85,27 +112,42 @@ function socketServer(server) {
     socket.on("answer-call", (data) => {
       const {
         callerId,
-        receiverId
+        receiverId,
+        answer
       } = data || {};
 
       const targetSocket = onlineUsers.get(callerId);
 
       if (targetSocket) {
         io.to(targetSocket).emit("call-answered", {
-          receiverId
+          receiverId,
+          answer
         });
       }
     });
 
     /* =========================
-       REJECT CALL
+       ICE CANDIDATE
     ========================= */
-    socket.on("reject-call", (data) => {
+    socket.on("ice-candidate", (data) => {
       const {
-        callerId,
-        receiverId
+        targetUserId,
+        candidate
       } = data || {};
 
+      const targetSocket = onlineUsers.get(targetUserId);
+
+      if (targetSocket) {
+        io.to(targetSocket).emit("ice-candidate", {
+          candidate
+        });
+      }
+    });
+
+    /* =========================
+       REJECT / DECLINE CALL
+    ========================= */
+    socket.on("reject-call", ({ callerId, receiverId }) => {
       const targetSocket = onlineUsers.get(callerId);
 
       if (targetSocket) {
@@ -115,44 +157,24 @@ function socketServer(server) {
       }
     });
 
+    socket.on("decline-call", ({ callerId }) => {
+      const targetSocket = onlineUsers.get(callerId);
+
+      if (targetSocket) {
+        io.to(targetSocket).emit("call-declined");
+      }
+    });
+
     /* =========================
        END CALL
     ========================= */
-    socket.on("end-call", (data) => {
-      const {
-        receiverId,
-        callerId
-      } = data || {};
-
+    socket.on("end-call", ({ callerId, receiverId }) => {
       const targetSocket =
         onlineUsers.get(receiverId) ||
         onlineUsers.get(callerId);
 
       if (targetSocket) {
         io.to(targetSocket).emit("call-ended");
-      }
-    });
-
-    /* =========================
-       TYPING STATUS
-    ========================= */
-    socket.on("typing", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
-
-      if (targetSocket) {
-        io.to(targetSocket).emit("user-typing", {
-          senderId: data.senderId
-        });
-      }
-    });
-
-    socket.on("stop-typing", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
-
-      if (targetSocket) {
-        io.to(targetSocket).emit("user-stop-typing", {
-          senderId: data.senderId
-        });
       }
     });
 
