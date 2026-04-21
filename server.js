@@ -61,8 +61,8 @@ if (!admin.apps.length) {
     });
 
     console.log("Firebase connected");
-  } catch {
-    console.log("Firebase skipped");
+  } catch (error) {
+    console.log("Firebase skipped:", error.message);
   }
 }
 
@@ -221,7 +221,8 @@ app.use("/calls", callRoutes);
 ========================= */
 app.get("/", (req, res) => {
   res.json({
-    status: "ReelMind backend running"
+    status: "ReelMind backend running",
+    realtime: true
   });
 });
 
@@ -242,7 +243,10 @@ app.get("/me", auth, (req, res) => {
 ========================= */
 app.post("/generate-text", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
 
   res.json({
     data: {
@@ -256,7 +260,10 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
 
   const prompt = improvePrompt(req.body.prompt, "image");
 
@@ -264,7 +271,9 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-  res.json({ data: { url } });
+  res.json({
+    data: { url }
+  });
 });
 
 /* =========================
@@ -272,7 +281,10 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
 ========================= */
 app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
 
   const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
@@ -280,7 +292,9 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
     `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
     `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-  res.json({ data: { url } });
+  res.json({
+    data: { url }
+  });
 });
 
 /* =========================
@@ -288,7 +302,10 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
 ========================= */
 app.post("/generate-video", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
-  if (!allowed) return res.status(403).json({ error: "Not enough credits" });
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Not enough credits" });
+  }
 
   res.json({
     preview: "https://www.w3schools.com/html/mov_bbb.mp4"
