@@ -86,8 +86,13 @@ const transactionSchema = new mongoose.Schema({
   date: { type: Date, default: Date.now }
 });
 
-const User = mongoose.models.User || mongoose.model("User", userSchema);
-const Transaction = mongoose.models.Transaction || mongoose.model("Transaction", transactionSchema);
+const User =
+  mongoose.models.User ||
+  mongoose.model("User", userSchema);
+
+const Transaction =
+  mongoose.models.Transaction ||
+  mongoose.model("Transaction", transactionSchema);
 
 /* =========================
    CREDIT COSTS
@@ -210,7 +215,7 @@ async function deductCredits(user, amount, mode) {
 }
 
 /* =========================
-   API ROUTES
+   ROUTES
 ========================= */
 app.use("/videos", videoRoutes);
 app.use("/messages", messageRoutes);
@@ -232,20 +237,25 @@ app.get("/", (req, res) => {
 app.get("/me", auth, (req, res) => {
   res.json({
     email: req.user?.email || "",
-    credits: req.user?.email === ADMIN_EMAIL ? "∞" : req.user?.credits || 0,
+    credits:
+      req.user?.email === ADMIN_EMAIL
+        ? "∞"
+        : req.user?.credits || 0,
     city: req.user?.city || "Unknown",
     country: req.user?.country || "Unknown"
   });
 });
 
 /* =========================
-   GENERATE TEXT
+   AI TEXT
 ========================= */
 app.post("/generate-text", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.text, "Text");
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   res.json({
@@ -256,13 +266,15 @@ app.post("/generate-text", antiAbuse, auth, async (req, res) => {
 });
 
 /* =========================
-   GENERATE IMAGE
+   AI IMAGE
 ========================= */
 app.post("/generate-image", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image");
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   const prompt = improvePrompt(req.body.prompt, "image");
@@ -277,13 +289,15 @@ app.post("/generate-image", antiAbuse, auth, async (req, res) => {
 });
 
 /* =========================
-   EDIT IMAGE
+   AI IMAGE EDIT
 ========================= */
 app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
@@ -298,13 +312,15 @@ app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res
 });
 
 /* =========================
-   GENERATE VIDEO
+   AI VIDEO
 ========================= */
 app.post("/generate-video", antiAbuse, auth, async (req, res) => {
   const allowed = await deductCredits(req.user, COSTS.video, "Video");
 
   if (!allowed) {
-    return res.status(403).json({ error: "Not enough credits" });
+    return res.status(403).json({
+      error: "Not enough credits"
+    });
   }
 
   res.json({
@@ -313,12 +329,12 @@ app.post("/generate-video", antiAbuse, auth, async (req, res) => {
 });
 
 /* =========================
-   SOCKET START
+   SOCKET.IO
 ========================= */
 socketServer(server);
 
 /* =========================
-   SERVER START
+   START SERVER
 ========================= */
 server.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
