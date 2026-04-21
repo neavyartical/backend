@@ -13,7 +13,7 @@ const http = require("http");
 const videoRoutes = require("./routes/video");
 const messageRoutes = require("./routes/message");
 const callRoutes = require("./routes/call");
-const socketServer = require("./socket/socketServer");
+const socketServer = require("./socket/socketHandler");
 
 /* =========================
    APP SETUP
