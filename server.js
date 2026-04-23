@@ -4,7 +4,6 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const admin = require("firebase-admin");
-const multer = require("multer");
 const http = require("http");
 
 /* =========================
@@ -13,6 +12,7 @@ const http = require("http");
 const videoRoutes = require("./routes/video");
 const messageRoutes = require("./routes/message");
 const callRoutes = require("./routes/call");
+const aiRoutes = require("./ai");
 const socketServer = require("./socket/socketHandler");
 
 /* =========================
@@ -23,10 +23,6 @@ const server = http.createServer(app);
 
 const PORT = process.env.PORT || 10000;
 const HOST = "0.0.0.0";
-
-const upload = multer({
-  storage: multer.memoryStorage()
-});
 
 const ADMIN_EMAIL = "neavyartical@gmail.com";
 const requestLimiter = new Map();
@@ -160,29 +156,6 @@ async function auth(req, res, next) {
 /* =========================
    HELPERS
 ========================= */
-function improvePrompt(prompt, mode) {
-  const clean = String(prompt || "").trim();
-
-  if (!clean) return "";
-
-  if (mode === "image") {
-    return `${clean}
-masterpiece, ultra realistic, cinematic lighting, highly detailed`;
-  }
-
-  if (mode === "video") {
-    return `${clean}
-cinematic motion, smooth movement, professional film quality`;
-  }
-
-  if (mode === "text") {
-    return `${clean}
-Write professionally with immersive storytelling`;
-  }
-
-  return clean;
-}
-
 async function logTransaction(email, type, amount, description) {
   try {
     await Transaction.create({
@@ -215,11 +188,23 @@ async function deductCredits(user, amount, mode) {
 }
 
 /* =========================
+   ATTACH SHARED MIDDLEWARE
+========================= */
+app.use((req, res, next) => {
+  req.authUser = auth;
+  req.antiAbuse = antiAbuse;
+  req.deductCredits = deductCredits;
+  req.COSTS = COSTS;
+  next();
+});
+
+/* =========================
    ROUTES
 ========================= */
 app.use("/videos", videoRoutes);
 app.use("/messages", messageRoutes);
 app.use("/calls", callRoutes);
+app.use("/ai", aiRoutes);
 
 /* =========================
    ROOT
@@ -227,7 +212,10 @@ app.use("/calls", callRoutes);
 app.get("/", (req, res) => {
   res.json({
     status: "ReelMind backend running",
-    realtime: true
+    realtime: true,
+    ai: true,
+    messaging: true,
+    videos: true
   });
 });
 
@@ -243,88 +231,6 @@ app.get("/me", auth, (req, res) => {
         : req.user?.credits || 0,
     city: req.user?.city || "Unknown",
     country: req.user?.country || "Unknown"
-  });
-});
-
-/* =========================
-   AI TEXT
-========================= */
-app.post("/generate-text", antiAbuse, auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.text, "Text");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  res.json({
-    data: {
-      content: improvePrompt(req.body.prompt, "text")
-    }
-  });
-});
-
-/* =========================
-   AI IMAGE
-========================= */
-app.post("/generate-image", antiAbuse, auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.image, "Image");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  const prompt = improvePrompt(req.body.prompt, "image");
-
-  const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
-
-  res.json({
-    data: { url }
-  });
-});
-
-/* =========================
-   AI IMAGE EDIT
-========================= */
-app.post("/edit-image", antiAbuse, auth, upload.single("image"), async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.image, "Image Edit");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
-
-  const url =
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
-    `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
-
-  res.json({
-    data: { url }
-  });
-});
-
-/* =========================
-   AI VIDEO
-========================= */
-app.post("/generate-video", antiAbuse, auth, async (req, res) => {
-  const allowed = await deductCredits(req.user, COSTS.video, "Video");
-
-  if (!allowed) {
-    return res.status(403).json({
-      error: "Not enough credits"
-    });
-  }
-
-  res.json({
-    preview: "https://www.w3schools.com/html/mov_bbb.mp4"
   });
 });
 
