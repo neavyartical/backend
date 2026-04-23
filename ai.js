@@ -1,14 +1,18 @@
-
 const express = require("express");
 const router = express.Router();
 
 /* =========================
-   HELPER
+   PROMPT IMPROVER
 ========================= */
 function improvePrompt(prompt, mode) {
   const clean = String(prompt || "").trim();
 
   if (!clean) return "";
+
+  if (mode === "text") {
+    return `${clean}
+Write professionally with immersive storytelling and engaging detail.`;
+  }
 
   if (mode === "image") {
     return `${clean}
@@ -20,22 +24,17 @@ masterpiece, ultra realistic, cinematic lighting, highly detailed`;
 cinematic motion, smooth movement, professional film quality`;
   }
 
-  if (mode === "text") {
-    return `${clean}
-Write professionally with immersive storytelling`;
-  }
-
   return clean;
 }
 
 /* =========================
-   TEXT GENERATION
+   AI TEXT
 ========================= */
 router.post("/text", async (req, res) => {
   try {
     const prompt = improvePrompt(req.body.prompt, "text");
 
-    res.json({
+    return res.json({
       success: true,
       type: "text",
       data: {
@@ -43,7 +42,7 @@ router.post("/text", async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Text generation failed"
     });
@@ -51,7 +50,7 @@ router.post("/text", async (req, res) => {
 });
 
 /* =========================
-   IMAGE GENERATION
+   AI IMAGE
 ========================= */
 router.post("/image", async (req, res) => {
   try {
@@ -61,7 +60,7 @@ router.post("/image", async (req, res) => {
       `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
       `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-    res.json({
+    return res.json({
       success: true,
       type: "image",
       data: {
@@ -69,7 +68,7 @@ router.post("/image", async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Image generation failed"
     });
@@ -77,22 +76,22 @@ router.post("/image", async (req, res) => {
 });
 
 /* =========================
-   VIDEO GENERATION
+   AI VIDEO
 ========================= */
 router.post("/video", async (req, res) => {
   try {
     const prompt = improvePrompt(req.body.prompt, "video");
 
-    res.json({
+    return res.json({
       success: true,
       type: "video",
       data: {
-        url: "https://www.w3schools.com/html/mov_bbb.mp4",
-        prompt
+        prompt,
+        preview: "https://www.w3schools.com/html/mov_bbb.mp4"
       }
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Video generation failed"
     });
@@ -100,28 +99,25 @@ router.post("/video", async (req, res) => {
 });
 
 /* =========================
-   IMAGE EDIT
+   AI EDIT IMAGE
 ========================= */
-router.post("/edit", async (req, res) => {
+router.post("/edit-image", async (req, res) => {
   try {
-    const prompt = improvePrompt(
-      req.body.prompt || "Enhance image",
-      "image"
-    );
+    const prompt = improvePrompt(req.body.prompt || "Enhance image", "image");
 
     const imageUrl =
       `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +
       `?width=1024&height=1024&seed=${Date.now()}&enhance=true&nologo=true&private=true`;
 
-    res.json({
+    return res.json({
       success: true,
-      type: "edit",
+      type: "edit-image",
       data: {
         url: imageUrl
       }
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: "Image editing failed"
     });
