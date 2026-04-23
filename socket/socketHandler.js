@@ -1,6 +1,6 @@
 const { Server } = require("socket.io");
 
-function socketServer(server) {
+function socketHandler(server) {
   const io = new Server(server, {
     cors: {
       origin: "*",
@@ -17,23 +17,44 @@ function socketServer(server) {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
+    /* =========================
+       REGISTER USER
+    ========================= */
     socket.on("register", (userId) => {
       if (!userId) return;
 
       onlineUsers.set(userId, socket.id);
       socket.userId = userId;
+
       emitOnlineUsers();
+
+      console.log("Registered:", userId);
     });
 
-    socket.on("send-message", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
+    /* =========================
+       PRIVATE MESSAGE
+    ========================= */
+    socket.on("send-message", (data = {}) => {
+      const { senderId, receiverId, text, createdAt } = data;
+
+      if (!receiverId || !text) return;
+
+      const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("receive-message", data);
+        io.to(targetSocket).emit("receive-message", {
+          senderId,
+          receiverId,
+          text,
+          createdAt: createdAt || new Date()
+        });
       }
     });
 
-    socket.on("typing", ({ senderId, receiverId }) => {
+    /* =========================
+       TYPING STATUS
+    ========================= */
+    socket.on("typing", ({ senderId, receiverId } = {}) => {
       const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
@@ -41,7 +62,7 @@ function socketServer(server) {
       }
     });
 
-    socket.on("stop-typing", ({ senderId, receiverId }) => {
+    socket.on("stop-typing", ({ senderId, receiverId } = {}) => {
       const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
@@ -49,56 +70,105 @@ function socketServer(server) {
       }
     });
 
-    socket.on("call-user", (data) => {
-      const targetSocket = onlineUsers.get(data.receiverId);
+    /* =========================
+       START CALL
+    ========================= */
+    socket.on("call-user", (data = {}) => {
+      const {
+        callerId,
+        receiverId,
+        callerName,
+        offer,
+        type
+      } = data;
+
+      const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("incoming-call", data);
+        io.to(targetSocket).emit("incoming-call", {
+          callerId,
+          callerName,
+          offer,
+          type: type || "audio"
+        });
       }
     });
 
-    socket.on("answer-call", (data) => {
-      const targetSocket = onlineUsers.get(data.callerId);
+    /* =========================
+       ANSWER CALL
+    ========================= */
+    socket.on("answer-call", (data = {}) => {
+      const { callerId, receiverId, answer } = data;
+
+      const targetSocket = onlineUsers.get(callerId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("call-answered", data);
+        io.to(targetSocket).emit("call-answered", {
+          receiverId,
+          answer
+        });
       }
     });
 
-    socket.on("reject-call", (data) => {
-      const targetSocket = onlineUsers.get(data.callerId);
+    /* =========================
+       REJECT CALL
+    ========================= */
+    socket.on("reject-call", ({ callerId, receiverId } = {}) => {
+      const targetSocket = onlineUsers.get(callerId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("call-rejected", data);
+        io.to(targetSocket).emit("call-rejected", {
+          receiverId
+        });
       }
     });
 
-    socket.on("ice-candidate", (data) => {
-      const targetSocket = onlineUsers.get(data.targetUserId);
+    /* =========================
+       ICE CANDIDATE
+    ========================= */
+    socket.on("ice-candidate", ({ targetUserId, candidate } = {}) => {
+      const targetSocket = onlineUsers.get(targetUserId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("ice-candidate", data);
+        io.to(targetSocket).emit("ice-candidate", {
+          candidate
+        });
       }
     });
 
-    socket.on("end-call", (data) => {
+    /* =========================
+       END CALL
+    ========================= */
+    socket.on("end-call", ({ callerId, receiverId } = {}) => {
       const targetSocket =
-        onlineUsers.get(data.receiverId) ||
-        onlineUsers.get(data.callerId);
+        onlineUsers.get(receiverId) ||
+        onlineUsers.get(callerId);
 
       if (targetSocket) {
         io.to(targetSocket).emit("call-ended");
       }
     });
 
+    /* =========================
+       DISCONNECT
+    ========================= */
     socket.on("disconnect", () => {
       if (socket.userId) {
         onlineUsers.delete(socket.userId);
+      } else {
+        for (const [userId, socketId] of onlineUsers.entries()) {
+          if (socketId === socket.id) {
+            onlineUsers.delete(userId);
+            break;
+          }
+        }
       }
 
       emitOnlineUsers();
+
+      console.log("User disconnected:", socket.id);
     });
   });
 }
 
-module.exports = socketServer;
+module.exports = socketHandler;
