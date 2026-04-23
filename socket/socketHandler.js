@@ -1,6 +1,6 @@
 const { Server } = require("socket.io");
 
-function socketHandler(server) {
+function socketServer(server) {
   const io = new Server(server, {
     cors: {
       origin: "*",
@@ -28,14 +28,19 @@ function socketHandler(server) {
 
       emitOnlineUsers();
 
-      console.log("Registered:", userId);
+      console.log(`Registered user: ${userId}`);
     });
 
     /* =========================
        PRIVATE MESSAGE
     ========================= */
-    socket.on("send-message", (data = {}) => {
-      const { senderId, receiverId, text, createdAt } = data;
+    socket.on("send-message", (data) => {
+      const {
+        senderId,
+        receiverId,
+        text,
+        createdAt
+      } = data || {};
 
       if (!receiverId || !text) return;
 
@@ -54,33 +59,37 @@ function socketHandler(server) {
     /* =========================
        TYPING STATUS
     ========================= */
-    socket.on("typing", ({ senderId, receiverId } = {}) => {
+    socket.on("typing", ({ senderId, receiverId }) => {
       const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("user-typing", { senderId });
+        io.to(targetSocket).emit("user-typing", {
+          senderId
+        });
       }
     });
 
-    socket.on("stop-typing", ({ senderId, receiverId } = {}) => {
+    socket.on("stop-typing", ({ senderId, receiverId }) => {
       const targetSocket = onlineUsers.get(receiverId);
 
       if (targetSocket) {
-        io.to(targetSocket).emit("user-stop-typing", { senderId });
+        io.to(targetSocket).emit("user-stop-typing", {
+          senderId
+        });
       }
     });
 
     /* =========================
        START CALL
     ========================= */
-    socket.on("call-user", (data = {}) => {
+    socket.on("call-user", (data) => {
       const {
         callerId,
         receiverId,
         callerName,
         offer,
         type
-      } = data;
+      } = data || {};
 
       const targetSocket = onlineUsers.get(receiverId);
 
@@ -97,8 +106,12 @@ function socketHandler(server) {
     /* =========================
        ANSWER CALL
     ========================= */
-    socket.on("answer-call", (data = {}) => {
-      const { callerId, receiverId, answer } = data;
+    socket.on("answer-call", (data) => {
+      const {
+        callerId,
+        receiverId,
+        answer
+      } = data || {};
 
       const targetSocket = onlineUsers.get(callerId);
 
@@ -113,7 +126,9 @@ function socketHandler(server) {
     /* =========================
        REJECT CALL
     ========================= */
-    socket.on("reject-call", ({ callerId, receiverId } = {}) => {
+    socket.on("reject-call", (data) => {
+      const { callerId, receiverId } = data || {};
+
       const targetSocket = onlineUsers.get(callerId);
 
       if (targetSocket) {
@@ -126,7 +141,12 @@ function socketHandler(server) {
     /* =========================
        ICE CANDIDATE
     ========================= */
-    socket.on("ice-candidate", ({ targetUserId, candidate } = {}) => {
+    socket.on("ice-candidate", (data) => {
+      const {
+        targetUserId,
+        candidate
+      } = data || {};
+
       const targetSocket = onlineUsers.get(targetUserId);
 
       if (targetSocket) {
@@ -139,7 +159,12 @@ function socketHandler(server) {
     /* =========================
        END CALL
     ========================= */
-    socket.on("end-call", ({ callerId, receiverId } = {}) => {
+    socket.on("end-call", (data) => {
+      const {
+        callerId,
+        receiverId
+      } = data || {};
+
       const targetSocket =
         onlineUsers.get(receiverId) ||
         onlineUsers.get(callerId);
@@ -147,6 +172,21 @@ function socketHandler(server) {
       if (targetSocket) {
         io.to(targetSocket).emit("call-ended");
       }
+    });
+
+    /* =========================
+       LIVE FEED EVENTS
+    ========================= */
+    socket.on("new-post", (post) => {
+      io.emit("feed-new-post", post);
+    });
+
+    socket.on("like-post", (data) => {
+      io.emit("feed-post-liked", data);
+    });
+
+    socket.on("new-comment", (data) => {
+      io.emit("feed-new-comment", data);
     });
 
     /* =========================
@@ -171,4 +211,4 @@ function socketHandler(server) {
   });
 }
 
-module.exports = socketHandler;
+module.exports = socketServer;
