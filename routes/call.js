@@ -3,6 +3,7 @@ const router = express.Router();
 
 const {
   startCall,
+  answerCall,
   endCall,
   getCallHistory
 } = require("../controllers/callController");
@@ -11,6 +12,7 @@ const {
    CALL ROUTES
 ========================= */
 router.post("/start", startCall);
+router.post("/answer", answerCall);
 router.post("/end", endCall);
 router.get("/:userId", getCallHistory);
 
