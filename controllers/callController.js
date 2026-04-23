@@ -5,13 +5,18 @@ const Call = require("../models/Call");
 ========================= */
 const startCall = async (req, res) => {
   try {
-    const { caller, receiver, type } = req.body;
+    const {
+      caller,
+      receiver,
+      type
+    } = req.body;
 
     const call = await Call.create({
       caller,
       receiver,
-      type,
-      status: "ongoing"
+      type: type || "audio",
+      status: "ringing",
+      startedAt: new Date()
     });
 
     res.json({
@@ -20,7 +25,35 @@ const startCall = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to start call"
+    });
+  }
+};
+
+/* =========================
+   ANSWER CALL
+========================= */
+const answerCall = async (req, res) => {
+  try {
+    const { callId } = req.body;
+
+    const call = await Call.findByIdAndUpdate(
+      callId,
+      {
+        status: "answered"
+      },
+      { new: true }
+    );
+
+    res.json({
+      success: true,
+      call
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: "Failed to answer call"
     });
   }
 };
@@ -32,11 +65,31 @@ const endCall = async (req, res) => {
   try {
     const { callId } = req.body;
 
+    const existingCall = await Call.findById(callId);
+
+    if (!existingCall) {
+      return res.status(404).json({
+        success: false,
+        error: "Call not found"
+      });
+    }
+
+    const endedAt = new Date();
+
+    const duration =
+      existingCall.startedAt
+        ? Math.floor((endedAt - existingCall.startedAt) / 1000)
+        : 0;
+
     const call = await Call.findByIdAndUpdate(
       callId,
       {
-        status: "ended",
-        endedAt: new Date()
+        status:
+          existingCall.status === "ringing"
+            ? "missed"
+            : "ended",
+        endedAt,
+        duration
       },
       { new: true }
     );
@@ -47,6 +100,7 @@ const endCall = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to end call"
     });
   }
@@ -72,6 +126,7 @@ const getCallHistory = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: "Failed to load calls"
     });
   }
@@ -79,6 +134,7 @@ const getCallHistory = async (req, res) => {
 
 module.exports = {
   startCall,
+  answerCall,
   endCall,
   getCallHistory
 };
