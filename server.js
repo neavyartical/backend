@@ -5,7 +5,7 @@ const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 
-const socketServer = require("./socketHandler");
+const socketHandler = require("./socket/socketHandler");
 const admin = require("./firebaseAdmin");
 
 /* =========================
@@ -17,44 +17,45 @@ const server = http.createServer(app);
 /* =========================
    ENVIRONMENT
 ========================= */
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = process.env.PORT || 3000;
 const MONGO_URI = process.env.MONGO_URI || "";
 
 /* =========================
    MIDDLEWARE
 ========================= */
-app.use(
-  cors({
-    origin: "*",
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"]
-  })
-);
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
 
-app.use(express.json({ limit: "50mb" }));
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "50mb"
-  })
-);
+app.use(express.json({
+  limit: "50mb"
+}));
+
+app.use(express.urlencoded({
+  extended: true,
+  limit: "50mb"
+}));
 
 /* =========================
-   FIREBASE TOKEN CHECK
+   FIREBASE TOKEN VERIFY
 ========================= */
 async function verifyFirebaseToken(req, res, next) {
   try {
-    const header = req.headers.authorization || "";
+    const authHeader = req.headers.authorization || "";
 
-    if (!header.startsWith("Bearer ")) {
+    if (!authHeader.startsWith("Bearer ")) {
       return next();
     }
 
-    const token = header.replace("Bearer ", "");
+    const token = authHeader.split("Bearer ")[1];
 
-    const decoded = await admin.auth().verifyIdToken(token);
+    const decodedToken = await admin
+      .auth()
+      .verifyIdToken(token);
 
-    req.user = decoded;
+    req.user = decodedToken;
   } catch (error) {
     console.log("Firebase auth skipped:", error.message);
   }
@@ -65,11 +66,11 @@ async function verifyFirebaseToken(req, res, next) {
 app.use(verifyFirebaseToken);
 
 /* =========================
-   DATABASE CONNECTION
+   DATABASE CONNECT
 ========================= */
 async function connectDatabase() {
   if (!MONGO_URI) {
-    console.warn("MONGO_URI missing");
+    console.warn("MONGO_URI not provided");
     return;
   }
 
@@ -77,7 +78,7 @@ async function connectDatabase() {
     await mongoose.connect(MONGO_URI);
     console.log("MongoDB connected");
   } catch (error) {
-    console.error("MongoDB failed:", error.message);
+    console.error("MongoDB error:", error.message);
   }
 }
 
@@ -94,25 +95,26 @@ app.get("/", (req, res) => {
 
 app.get("/status", (req, res) => {
   res.status(200).json({
+    success: true,
     server: "online",
     mongodb:
       mongoose.connection.readyState === 1
         ? "connected"
         : "disconnected",
     firebase: "ready",
-    timestamp: new Date()
+    time: new Date()
   });
 });
 
 /* =========================
    SAFE ROUTE LOADER
 ========================= */
-function loadRoute(path, file) {
+function loadRoute(routePath, filePath) {
   try {
-    app.use(path, require(file));
-    console.log(`Loaded ${path}`);
+    app.use(routePath, require(filePath));
+    console.log(`Loaded route: ${routePath}`);
   } catch (error) {
-    console.warn(`Skipped ${path}:`, error.message);
+    console.warn(`Skipped route ${routePath}:`, error.message);
   }
 }
 
@@ -125,7 +127,7 @@ loadRoute("/feed", "./routes/feedRoutes");
 loadRoute("/ai", "./routes/aiRoutes");
 
 /* =========================
-   404
+   NOT FOUND
 ========================= */
 app.use((req, res) => {
   res.status(404).json({
@@ -147,9 +149,9 @@ app.use((error, req, res, next) => {
 });
 
 /* =========================
-   SOCKET SERVER
+   SOCKET INITIALIZATION
 ========================= */
-socketServer(server);
+socketHandler(server);
 
 /* =========================
    START SERVER
@@ -165,17 +167,20 @@ async function startServer() {
 startServer();
 
 /* =========================
-   SHUTDOWN
+   GRACEFUL SHUTDOWN
 ========================= */
-async function shutdown(signal) {
+async function gracefulShutdown(signal) {
   console.log(`${signal} received`);
 
   try {
     await mongoose.connection.close();
-  } catch (error) {}
+    console.log("MongoDB closed");
+  } catch (error) {
+    console.log("Shutdown warning:", error.message);
+  }
 
   process.exit(0);
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
