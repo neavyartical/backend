@@ -50,8 +50,12 @@ async function verifyFirebaseToken(req, res, next) {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const decoded = await admin.auth().verifyIdToken(token);
 
+    if (!admin || !admin.apps.length) {
+      return next();
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
     req.user = decoded;
   } catch (error) {
     console.log("Firebase auth skipped:", error.message);
@@ -98,7 +102,10 @@ app.get("/status", (req, res) => {
       mongoose.connection.readyState === 1
         ? "connected"
         : "disconnected",
-    firebase: "ready",
+    firebase:
+      admin && admin.apps.length
+        ? "ready"
+        : "disabled",
     timestamp: new Date()
   });
 });
@@ -121,6 +128,7 @@ function loadRoute(routePath, filePath) {
 ========================= */
 loadRoute("/auth", "./routes/auth");
 loadRoute("/messages", "./routes/messages");
+loadRoute("/calls", "./routes/callRoutes");
 loadRoute("/feed", "./routes/feed");
 loadRoute("/ai", "./routes/ai");
 
