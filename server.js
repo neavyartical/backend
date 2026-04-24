@@ -50,7 +50,6 @@ async function verifyFirebaseToken(req, res, next) {
     }
 
     const token = authHeader.replace("Bearer ", "");
-
     const decoded = await admin.auth().verifyIdToken(token);
 
     req.user = decoded;
@@ -120,11 +119,6 @@ function loadRoute(routePath, filePath) {
 /* =========================
    API ROUTES
 ========================= */
-
-/*
-MAKE SURE THESE FILE NAMES MATCH
-YOUR REAL FILES INSIDE routes/
-*/
 loadRoute("/auth", "./routes/auth");
 loadRoute("/messages", "./routes/messages");
 loadRoute("/feed", "./routes/feed");
