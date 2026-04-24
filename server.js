@@ -17,7 +17,7 @@ const server = http.createServer(app);
 /* =========================
    ENVIRONMENT
 ========================= */
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const MONGO_URI = process.env.MONGO_URI || "";
 
 /* =========================
@@ -25,8 +25,8 @@ const MONGO_URI = process.env.MONGO_URI || "";
 ========================= */
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 
 app.use(express.json({
@@ -49,13 +49,11 @@ async function verifyFirebaseToken(req, res, next) {
       return next();
     }
 
-    const token = authHeader.split("Bearer ")[1];
+    const token = authHeader.replace("Bearer ", "");
 
-    const decodedToken = await admin
-      .auth()
-      .verifyIdToken(token);
+    const decoded = await admin.auth().verifyIdToken(token);
 
-    req.user = decodedToken;
+    req.user = decoded;
   } catch (error) {
     console.log("Firebase auth skipped:", error.message);
   }
@@ -66,19 +64,19 @@ async function verifyFirebaseToken(req, res, next) {
 app.use(verifyFirebaseToken);
 
 /* =========================
-   DATABASE CONNECT
+   DATABASE CONNECTION
 ========================= */
 async function connectDatabase() {
   if (!MONGO_URI) {
-    console.warn("MONGO_URI not provided");
+    console.warn("⚠️ MONGO_URI missing");
     return;
   }
 
   try {
     await mongoose.connect(MONGO_URI);
-    console.log("MongoDB connected");
+    console.log("✅ MongoDB connected");
   } catch (error) {
-    console.error("MongoDB error:", error.message);
+    console.error("❌ MongoDB connection failed:", error.message);
   }
 }
 
@@ -102,7 +100,7 @@ app.get("/status", (req, res) => {
         ? "connected"
         : "disconnected",
     firebase: "ready",
-    time: new Date()
+    timestamp: new Date()
   });
 });
 
@@ -111,23 +109,29 @@ app.get("/status", (req, res) => {
 ========================= */
 function loadRoute(routePath, filePath) {
   try {
-    app.use(routePath, require(filePath));
-    console.log(`Loaded route: ${routePath}`);
+    const route = require(filePath);
+    app.use(routePath, route);
+    console.log(`✅ Loaded route ${routePath}`);
   } catch (error) {
-    console.warn(`Skipped route ${routePath}:`, error.message);
+    console.warn(`⚠️ Skipped route ${routePath}: ${error.message}`);
   }
 }
 
 /* =========================
    API ROUTES
 ========================= */
+
+/*
+MAKE SURE THESE FILE NAMES MATCH
+YOUR REAL FILES INSIDE routes/
+*/
 loadRoute("/auth", "./routes/auth");
-loadRoute("/messages", "./routes/messageRoutes");
-loadRoute("/feed", "./routes/feedRoutes");
-loadRoute("/ai", "./routes/aiRoutes");
+loadRoute("/messages", "./routes/messages");
+loadRoute("/feed", "./routes/feed");
+loadRoute("/ai", "./routes/ai");
 
 /* =========================
-   NOT FOUND
+   404 HANDLER
 ========================= */
 app.use((req, res) => {
   res.status(404).json({
@@ -160,7 +164,7 @@ async function startServer() {
   await connectDatabase();
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
   });
 }
 
