@@ -3,10 +3,18 @@ const admin = require("firebase-admin");
 let serviceAccount = null;
 
 try {
-  if (!process.env.FIREBASE_KEY) {
+  const rawKey = process.env.FIREBASE_KEY;
+
+  if (!rawKey) {
     console.warn("⚠️ FIREBASE_KEY is missing");
   } else {
-    serviceAccount = JSON.parse(process.env.FIREBASE_KEY);
+    serviceAccount = JSON.parse(rawKey);
+
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key =
+        serviceAccount.private_key.replace(/\\n/g, "\n");
+    }
+
     console.log("🔥 FIREBASE PROJECT:", serviceAccount.project_id);
   }
 } catch (error) {
@@ -17,6 +25,8 @@ if (!admin.apps.length && serviceAccount) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
+
+  console.log("✅ Firebase initialized");
 }
 
 module.exports = admin;
