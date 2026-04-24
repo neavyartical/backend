@@ -25,8 +25,6 @@ if (!admin.apps.length && serviceAccount) {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
-
-  console.log("✅ Firebase initialized");
 }
 
 module.exports = admin;
