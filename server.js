@@ -5,7 +5,7 @@ const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
 
-const socketServer = require("./socketServer");
+const socketServer = require("./socketHandler");
 const admin = require("./firebaseAdmin");
 
 /* =========================
@@ -40,7 +40,7 @@ app.use(
 );
 
 /* =========================
-   FIREBASE AUTH
+   FIREBASE TOKEN CHECK
 ========================= */
 async function verifyFirebaseToken(req, res, next) {
   try {
@@ -50,11 +50,9 @@ async function verifyFirebaseToken(req, res, next) {
       return next();
     }
 
-    const token = header.slice(7);
+    const token = header.replace("Bearer ", "");
 
-    const decoded = await admin
-      .auth()
-      .verifyIdToken(token);
+    const decoded = await admin.auth().verifyIdToken(token);
 
     req.user = decoded;
   } catch (error) {
@@ -67,7 +65,7 @@ async function verifyFirebaseToken(req, res, next) {
 app.use(verifyFirebaseToken);
 
 /* =========================
-   DATABASE
+   DATABASE CONNECTION
 ========================= */
 async function connectDatabase() {
   if (!MONGO_URI) {
@@ -77,13 +75,9 @@ async function connectDatabase() {
 
   try {
     await mongoose.connect(MONGO_URI);
-
     console.log("MongoDB connected");
   } catch (error) {
-    console.error(
-      "MongoDB connection failed:",
-      error.message
-    );
+    console.error("MongoDB failed:", error.message);
   }
 }
 
@@ -116,9 +110,9 @@ app.get("/status", (req, res) => {
 function loadRoute(path, file) {
   try {
     app.use(path, require(file));
-    console.log(`Loaded route ${path}`);
+    console.log(`Loaded ${path}`);
   } catch (error) {
-    console.warn(`Failed route ${path}:`, error.message);
+    console.warn(`Skipped ${path}:`, error.message);
   }
 }
 
@@ -153,7 +147,7 @@ app.use((error, req, res, next) => {
 });
 
 /* =========================
-   SOCKET.IO
+   SOCKET SERVER
 ========================= */
 socketServer(server);
 
@@ -178,7 +172,7 @@ async function shutdown(signal) {
 
   try {
     await mongoose.connection.close();
-  } catch {}
+  } catch (error) {}
 
   process.exit(0);
 }
