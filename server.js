@@ -49,13 +49,13 @@ async function verifyFirebaseToken(req, res, next) {
       return next();
     }
 
-    const token = authHeader.replace("Bearer ", "");
-
-    if (!admin || !admin.apps.length) {
+    if (!admin || !admin.apps || !admin.apps.length) {
       return next();
     }
 
+    const token = authHeader.replace("Bearer ", "");
     const decoded = await admin.auth().verifyIdToken(token);
+
     req.user = decoded;
   } catch (error) {
     console.log("Firebase auth skipped:", error.message);
@@ -103,7 +103,7 @@ app.get("/status", (req, res) => {
         ? "connected"
         : "disconnected",
     firebase:
-      admin && admin.apps.length
+      admin && admin.apps && admin.apps.length
         ? "ready"
         : "disabled",
     timestamp: new Date()
@@ -127,10 +127,10 @@ function loadRoute(routePath, filePath) {
    API ROUTES
 ========================= */
 loadRoute("/auth", "./routes/auth");
-loadRoute("/messages", "./routes/messages");
+loadRoute("/messages", "./routes/messageRoutes");
 loadRoute("/calls", "./routes/callRoutes");
-loadRoute("/feed", "./routes/feed");
-loadRoute("/ai", "./routes/ai");
+loadRoute("/feed", "./routes/feedRoutes");
+loadRoute("/ai", "./routes/aiRoutes");
 
 /* =========================
    404 HANDLER
