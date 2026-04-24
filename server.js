@@ -4,6 +4,7 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
+
 const socketServer = require("./socketServer");
 const admin = require("./firebaseAdmin");
 
@@ -16,52 +17,78 @@ const server = http.createServer(app);
 /* =========================
    ENVIRONMENT
 ========================= */
-const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI;
+const PORT = Number(process.env.PORT) || 3000;
+const MONGO_URI = process.env.MONGO_URI || "";
 
 /* =========================
    MIDDLEWARE
 ========================= */
-app.use(cors({ origin: "*", credentials: true }));
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"]
+  })
+);
+
 app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "50mb"
+  })
+);
 
 /* =========================
-   FIREBASE AUTH VERIFICATION
+   FIREBASE AUTH
 ========================= */
 async function verifyFirebaseToken(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.replace("Bearer ", "");
+    const header = req.headers.authorization || "";
 
-    if (!token) return next();
+    if (!header.startsWith("Bearer ")) {
+      return next();
+    }
 
-    const decoded = await admin.auth().verifyIdToken(token);
+    const token = header.slice(7);
+
+    const decoded = await admin
+      .auth()
+      .verifyIdToken(token);
+
     req.user = decoded;
-
-    next();
-  } catch (err) {
-    console.log("Firebase auth skipped:", err.message);
-    next();
+  } catch (error) {
+    console.log("Firebase auth skipped:", error.message);
   }
+
+  next();
 }
 
 app.use(verifyFirebaseToken);
 
 /* =========================
-   DATABASE CONNECTION
+   DATABASE
 ========================= */
 async function connectDatabase() {
+  if (!MONGO_URI) {
+    console.warn("MONGO_URI missing");
+    return;
+  }
+
   try {
     await mongoose.connect(MONGO_URI);
+
     console.log("MongoDB connected");
-  } catch (err) {
-    console.error("MongoDB connection failed:", err.message);
+  } catch (error) {
+    console.error(
+      "MongoDB connection failed:",
+      error.message
+    );
   }
 }
 
 /* =========================
-   HEALTH CHECK ROUTES
+   HEALTH ROUTES
 ========================= */
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -74,33 +101,55 @@ app.get("/", (req, res) => {
 app.get("/status", (req, res) => {
   res.status(200).json({
     server: "online",
-    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    mongodb:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
     firebase: "ready",
     timestamp: new Date()
   });
 });
 
 /* =========================
-   API ROUTES
+   SAFE ROUTE LOADER
 ========================= */
-try { app.use("/auth", require("./routes/authRoutes")); } catch {}
-try { app.use("/messages", require("./routes/messageRoutes")); } catch {}
-try { app.use("/feed", require("./routes/feedRoutes")); } catch {}
-try { app.use("/ai", require("./routes/aiRoutes")); } catch {}
+function loadRoute(path, file) {
+  try {
+    app.use(path, require(file));
+    console.log(`Loaded route ${path}`);
+  } catch (error) {
+    console.warn(`Failed route ${path}:`, error.message);
+  }
+}
 
 /* =========================
-   404 HANDLER
+   API ROUTES
+========================= */
+loadRoute("/auth", "./routes/auth");
+loadRoute("/messages", "./routes/messageRoutes");
+loadRoute("/feed", "./routes/feedRoutes");
+loadRoute("/ai", "./routes/aiRoutes");
+
+/* =========================
+   404
 ========================= */
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: "Route not found" });
+  res.status(404).json({
+    success: false,
+    message: "Route not found"
+  });
 });
 
 /* =========================
    ERROR HANDLER
 ========================= */
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ success: false, message: "Internal server error" });
+app.use((error, req, res, next) => {
+  console.error("Server error:", error);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error"
+  });
 });
 
 /* =========================
@@ -114,7 +163,7 @@ socketServer(server);
 async function startServer() {
   await connectDatabase();
 
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
@@ -122,16 +171,17 @@ async function startServer() {
 startServer();
 
 /* =========================
-   GRACEFUL SHUTDOWN
+   SHUTDOWN
 ========================= */
-process.on("SIGINT", async () => {
-  console.log("Closing server...");
-  await mongoose.connection.close();
-  process.exit(0);
-});
+async function shutdown(signal) {
+  console.log(`${signal} received`);
 
-process.on("SIGTERM", async () => {
-  console.log("Shutting down server...");
-  await mongoose.connection.close();
+  try {
+    await mongoose.connection.close();
+  } catch {}
+
   process.exit(0);
-});
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
