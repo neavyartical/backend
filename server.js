@@ -98,14 +98,8 @@ app.get("/status", (req, res) => {
   res.status(200).json({
     success: true,
     server: "online",
-    mongodb:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : "disconnected",
-    firebase:
-      admin && admin.apps && admin.apps.length
-        ? "ready"
-        : "disabled",
+    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    firebase: admin && admin.apps && admin.apps.length ? "ready" : "disabled",
     timestamp: new Date()
   });
 });
@@ -127,10 +121,9 @@ function loadRoute(routePath, filePath) {
    API ROUTES
 ========================= */
 loadRoute("/auth", "./routes/auth");
-loadRoute("/messages", "./routes/messageRoutes");
-loadRoute("/calls", "./routes/callRoutes");
-loadRoute("/feed", "./routes/feedRoutes");
-loadRoute("/ai", "./routes/aiRoutes");
+loadRoute("/messages", "./routes/message");
+loadRoute("/calls", "./routes/call");
+loadRoute("/video", "./routes/video");
 
 /* =========================
    404 HANDLER
