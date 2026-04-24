@@ -1,247 +1,182 @@
 require("dotenv").config();
 
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const admin = require("firebase-admin");
-const http = require("http");
+
+const socketServer = require("./socketServer");
+const admin = require("./firebaseAdmin");
 
 /* =========================
-   ROUTES
-========================= */
-const videoRoutes = require("./routes/video");
-const messageRoutes = require("./routes/message");
-const callRoutes = require("./routes/call");
-const aiRoutes = require("./ai");
-const socketServer = require("./socket/socketHandler");
-
-/* =========================
-   APP SETUP
+   APP
 ========================= */
 const app = express();
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 10000;
-const HOST = "0.0.0.0";
-
-const ADMIN_EMAIL = "neavyartical@gmail.com";
-const requestLimiter = new Map();
+/* =========================
+   ENV
+========================= */
+const PORT = process.env.PORT || 3000;
+const MONGO_URI = process.env.MONGO_URI;
 
 /* =========================
-   MIDDLEWARE
+   CORS
 ========================= */
-app.use(cors());
-app.use(express.json({ limit: "20mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+  })
+);
+
+/* =========================
+   BODY PARSER
+========================= */
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({
+  extended: true,
+  limit: "50mb"
+}));
+
+/* =========================
+   FIREBASE VERIFY
+========================= */
+async function verifyFirebase(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.replace("Bearer ", "");
+
+    if (!token) {
+      return next();
+    }
+
+    const decoded = await admin
+      .auth()
+      .verifyIdToken(token);
+
+    req.user = decoded;
+
+    next();
+  } catch (error) {
+    console.log("Auth skipped:", error.message);
+    next();
+  }
+}
+
+app.use(verifyFirebase);
 
 /* =========================
    DATABASE
 ========================= */
-if (process.env.MONGODB_URI) {
-  mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log("Mongo connected"))
-    .catch(err => console.log("Mongo error:", err.message));
-}
-
-/* =========================
-   FIREBASE
-========================= */
-if (!admin.apps.length) {
+async function connectDatabase() {
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(/\\n/g, "\n")
-      })
-    });
+    await mongoose.connect(MONGO_URI);
 
-    console.log("Firebase connected");
+    console.log("MongoDB connected");
   } catch (error) {
-    console.log("Firebase skipped:", error.message);
+    console.error("MongoDB failed:", error.message);
   }
 }
 
 /* =========================
-   MODELS
+   HEALTH ROUTES
 ========================= */
-const userSchema = new mongoose.Schema({
-  uid: String,
-  email: String,
-  credits: { type: Number, default: 50 },
-  requests: { type: Number, default: 0 },
-  country: { type: String, default: "Unknown" },
-  city: { type: String, default: "Unknown" }
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    app: "ReelMind AI Backend",
+    status: "running"
+  });
 });
 
-const transactionSchema = new mongoose.Schema({
-  email: String,
-  type: String,
-  amount: Number,
-  description: String,
-  date: { type: Date, default: Date.now }
-});
-
-const User =
-  mongoose.models.User ||
-  mongoose.model("User", userSchema);
-
-const Transaction =
-  mongoose.models.Transaction ||
-  mongoose.model("Transaction", transactionSchema);
-
-/* =========================
-   CREDIT COSTS
-========================= */
-const COSTS = {
-  text: 1,
-  image: 2,
-  video: 5
-};
-
-/* =========================
-   SECURITY
-========================= */
-function antiAbuse(req, res, next) {
-  const key = req.headers.authorization || req.ip;
-  const now = Date.now();
-  const previous = requestLimiter.get(key);
-
-  if (previous && now - previous < 3000) {
-    return res.status(429).json({
-      error: "Please wait before sending another request."
-    });
-  }
-
-  requestLimiter.set(key, now);
-
-  setTimeout(() => {
-    requestLimiter.delete(key);
-  }, 60000);
-
-  next();
-}
-
-/* =========================
-   AUTH
-========================= */
-async function auth(req, res, next) {
-  try {
-    const token = (req.headers.authorization || "").replace("Bearer ", "");
-
-    if (!token) {
-      req.user = null;
-      return next();
-    }
-
-    const decoded = await admin.auth().verifyIdToken(token);
-
-    let user = await User.findOne({ uid: decoded.uid });
-
-    if (!user) {
-      user = await User.create({
-        uid: decoded.uid,
-        email: decoded.email
-      });
-    }
-
-    req.user = user;
-    next();
-  } catch {
-    req.user = null;
-    next();
-  }
-}
-
-/* =========================
-   HELPERS
-========================= */
-async function logTransaction(email, type, amount, description) {
-  try {
-    await Transaction.create({
-      email,
-      type,
-      amount,
-      description
-    });
-  } catch {}
-}
-
-async function deductCredits(user, amount, mode) {
-  if (!user) return true;
-  if (user.email === ADMIN_EMAIL) return true;
-  if (user.credits < amount) return false;
-
-  user.credits -= amount;
-  user.requests += 1;
-
-  await user.save();
-
-  await logTransaction(
-    user.email,
-    "Generation",
-    -amount,
-    `${mode} generation`
-  );
-
-  return true;
-}
-
-/* =========================
-   ATTACH SHARED MIDDLEWARE
-========================= */
-app.use((req, res, next) => {
-  req.authUser = auth;
-  req.antiAbuse = antiAbuse;
-  req.deductCredits = deductCredits;
-  req.COSTS = COSTS;
-  next();
+app.get("/status", (req, res) => {
+  res.status(200).json({
+    server: "online",
+    mongodb:
+      mongoose.connection.readyState === 1
+        ? "connected"
+        : "disconnected",
+    firebase: "ready",
+    timestamp: new Date()
+  });
 });
 
 /* =========================
    ROUTES
 ========================= */
-app.use("/videos", videoRoutes);
-app.use("/messages", messageRoutes);
-app.use("/calls", callRoutes);
-app.use("/ai", aiRoutes);
+try {
+  app.use("/auth", require("./routes/authRoutes"));
+} catch {}
+
+try {
+  app.use("/messages", require("./routes/messageRoutes"));
+} catch {}
+
+try {
+  app.use("/feed", require("./routes/feedRoutes"));
+} catch {}
+
+try {
+  app.use("/ai", require("./routes/aiRoutes"));
+} catch {}
 
 /* =========================
-   ROOT
+   404
 ========================= */
-app.get("/", (req, res) => {
-  res.json({
-    status: "ReelMind backend running",
-    realtime: true,
-    ai: true,
-    messaging: true,
-    videos: true
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found"
   });
 });
 
 /* =========================
-   PROFILE
+   ERROR HANDLER
 ========================= */
-app.get("/me", auth, (req, res) => {
-  res.json({
-    email: req.user?.email || "",
-    credits:
-      req.user?.email === ADMIN_EMAIL
-        ? "∞"
-        : req.user?.credits || 0,
-    city: req.user?.city || "Unknown",
-    country: req.user?.country || "Unknown"
+app.use((error, req, res, next) => {
+  console.error(error);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal server error"
   });
 });
 
 /* =========================
-   SOCKET.IO
+   SOCKET
 ========================= */
 socketServer(server);
 
 /* =========================
-   START SERVER
+   START
 ========================= */
-server.listen(PORT, HOST, () => {
-  console.log(`Server running on ${HOST}:${PORT}`);
+async function startServer() {
+  await connectDatabase();
+
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer();
+
+/* =========================
+   GRACEFUL SHUTDOWN
+========================= */
+process.on("SIGINT", async () => {
+  console.log("Closing server...");
+
+  await mongoose.connection.close();
+
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
+
+  await mongoose.connection.close();
+
+  process.exit(0);
 });
