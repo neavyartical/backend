@@ -15,10 +15,10 @@ try {
         serviceAccount.private_key.replace(/\\n/g, "\n");
     }
 
-    console.log("🔥 FIREBASE PROJECT:", serviceAccount.project_id);
+    console.log("🔥 Firebase project:", serviceAccount.project_id);
   }
 } catch (error) {
-  console.error("❌ FIREBASE KEY ERROR:", error.message);
+  console.error("❌ Firebase key error:", error.message);
 }
 
 if (!admin.apps.length && serviceAccount) {
